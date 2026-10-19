@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/* Design tokens: plum + mauve, with four muted pastel tints for cards */
+@theme {
+  --font-sans: "DM Sans Variable", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-display: "Bricolage Grotesque Variable", "DM Sans Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #2b1f36;
+  --color-muted: #6c5f77;
+  --color-line: #ddd0d9;
+
+  --color-canvas: #cdb8d2;
+  --color-paper: #f8f3f4;
+  --color-rail: #ece1e6;
+
+  --color-lilac: #e2d3ea;
+  --color-blush: #f0d6db;
+  --color-sand: #ebe0d0;
+  --color-sage: #d6e0d3;
+  --color-iris: #dcd7f1;
+
+  --color-plum-100: #ece2f1;
+  --color-plum-200: #d9c7e3;
+  --color-plum-300: #bba2c9;
+  --color-plum-500: #86659b;
+  --color-plum-700: #5b3e70;
+  --color-plum-900: #3c2a4d;
+
+  --color-ok: #3a8a5d;
+  --color-warn: #f1c04d;
+  --color-warn-ink: #8a5f00;
+  --color-bad: #bf3f52;
+  --color-bad-ink: #8f2535;
+  --color-bad-soft: #f4d6da;
+}
+
+@layer base {
+  html { color-scheme: light; }
+  body { @apply bg-canvas font-sans text-ink antialiased; }
+  h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; }
+  :focus-visible { outline: 2px solid var(--color-plum-700); outline-offset: 2px; }
+}
+
+@layer components {
+  .btn { @apply inline-flex h-10 items-center justify-center gap-2 rounded-full px-5 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-40; }
+  .btn-sm { @apply h-8 px-3.5 text-[13px]; }
+  .btn-primary { @apply bg-plum-700 text-white hover:bg-plum-900; }
+  .btn-soft { @apply bg-plum-100 text-plum-900 hover:bg-plum-200; }
+  .btn-line { @apply border border-line bg-white text-ink hover:bg-plum-100; }
+  .btn-danger { @apply bg-bad text-white hover:opacity-90; }
+  .btn-text { @apply inline-flex items-center gap-1.5 text-sm font-medium text-plum-700 underline-offset-4 hover:underline; }
+
+  .field { @apply h-11 w-full rounded-full border border-line bg-white px-4 text-sm placeholder:text-muted/70 focus:border-plum-500 focus:ring-2 focus:ring-plum-300/60 focus:outline-none; }
+  textarea.field { @apply h-auto rounded-2xl py-3; }
+  select.field { @apply pr-8; }
+
+  .chip { @apply inline-flex h-8 items-center gap-1.5 rounded-full border border-line bg-white px-3.5 text-[13px] text-ink transition-colors hover:bg-plum-100; }
+  .chip[aria-pressed="true"] { @apply border-plum-900 bg-plum-900 text-white; }
+
+  .note { @apply text-sm text-muted; }
+  .alert { @apply rounded-2xl bg-bad-soft px-4 py-3 text-sm text-bad-ink; }
+  .tile { @apply rounded-3xl p-5; }
+  .row { @apply flex items-center justify-between gap-3 border-b border-line/70 px-4 py-3 last:border-b-0; }
+}
+
+/* A scan result answers a tap, so it gets one short motion. Nothing else animates on its own. */
+@keyframes pop { from { transform: scale(0.97); opacity: 0.5; } to { transform: none; opacity: 1; } }
+.pop { animation: pop 0.18s ease-out; }
+@media (prefers-reduced-motion: reduce) { .pop { animation: none; } }
