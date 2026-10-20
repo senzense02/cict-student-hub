@@ -12,14 +12,16 @@ export function useLive(topics, handler) {
   );
 }
 
-// true = receiving live updates, false = trying to reconnect, null = not known yet
+// { connected: true | false | null, push: boolean }
+// connected: receiving updates / trying to reconnect / not known yet. push: updates arrive over a live
+// connection (instant) rather than by polling (a few seconds).
 export function useLiveStatus() {
-  const [connected, setConnected] = useState(getStatus());
+  const [status, setStatus] = useState(getStatus());
   useEffect(() => {
-    setConnected(getStatus());
-    return onStatus(setConnected);
+    setStatus(getStatus());
+    return onStatus((connected, push) => setStatus({ connected, push }));
   }, []);
-  return connected;
+  return status;
 }
 
 // Which keys appeared since the previous render? Used to flash rows that just arrived.

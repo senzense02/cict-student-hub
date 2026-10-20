@@ -4,7 +4,7 @@ import { normalizeToken } from '../lib/logic.js';
 import Icon from './Icon.jsx';
 
 // Start/stop the phone's NFC reader, plus a manual box so you can test on a laptop.
-export default function ScanControls({ onToken, active = true }) {
+export default function ScanControls({ onToken, active = true, manual: showManual = true }) {
   const nfc = useNfc(onToken);
   const [manual, setManual] = useState('');
 
@@ -23,13 +23,13 @@ export default function ScanControls({ onToken, active = true }) {
       </div>
       {nfc.error && <p className="alert mt-3">{nfc.error}</p>}
 
-      <details className="mt-3 text-sm">
+      {showManual && <details className="mt-3 text-sm">
         <summary className="cursor-pointer text-muted">Test without a card</summary>
         <div className="mt-2 flex gap-2">
           <input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="Card ID, e.g. 04A1B2C3D4E5F1" className="field" />
           <button disabled={!active} onClick={() => manual.trim() && onToken(normalizeToken(manual))} className="btn btn-line shrink-0">Simulate tap</button>
         </div>
-      </details>
+      </details>}
     </div>
   );
 }

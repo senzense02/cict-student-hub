@@ -25,6 +25,7 @@ const publicUser = (u) => ({
   role: u.role,
   program: u.program ?? undefined,
   yearLevel: u.year_level ?? undefined,
+  hasCard: Boolean(u.nfc_token),
 });
 
 // Self-registration is for students only. Staff and admin accounts are created by an admin.
@@ -98,6 +99,41 @@ router.post('/nfc-login', asyncHandler(async (req, res) => {
   }
   await clearFails(bucket);
   res.json({ token: sign(user), user: publicUser(user) });
+}));
+
+// A student or event staff member links their own school ID card: tap it (or type its ID) and confirm
+// with the account password. The password is what stops someone from claiming a card that is not theirs.
+// Once a card is linked, only an admin can change it (ID cards tab), so cards cannot be swapped around.
+router.post('/card', auth, asyncHandler(async (req, res) => {
+  if (!['student', 'staff'].includes(req.user.role))
+    return res.status(403).json({ message: 'Your account cannot do that' });
+
+  const body = req.body || {};
+  const token = normalizeToken(body.token);
+  const password = String(body.password || '');
+  if (!token || !password) return res.status(400).json({ message: 'Tap your ID card and enter your password' });
+  if (token.length < 8) return res.status(400).json({ message: 'That does not look like a card ID' });
+
+  const bucket = bucketFor(req, `card:${req.user.id}`);
+  if (await isBlocked(bucket)) return res.status(429).json(TOO_MANY);
+
+  const user = await one('SELECT * FROM users WHERE id = $1', [req.user.id]);
+  if (!user) return res.status(404).json({ message: 'User not found' });
+  if (!(await bcrypt.compare(password, user.password_hash))) {
+    await recordFail(bucket);
+    return res.status(401).json({ message: 'Incorrect password' });
+  }
+  await clearFails(bucket);
+  if (user.nfc_token) return res.status(409).json({ message: 'A card is already linked. Ask an admin if it needs to be changed.' });
+
+  try {
+    await query('UPDATE users SET nfc_token = $1 WHERE id = $2 AND nfc_token IS NULL', [token, user.id]);
+  } catch (err) {
+    if (isDuplicate(err)) return res.status(409).json({ message: 'That card is already linked to another account' });
+    throw err;
+  }
+  await bump('users');
+  res.json({ user: publicUser({ ...user, nfc_token: token }) });
 }));
 
 router.get('/me', auth, asyncHandler(async (req, res) => {

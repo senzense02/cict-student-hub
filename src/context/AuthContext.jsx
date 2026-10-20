@@ -17,13 +17,18 @@ export function AuthProvider({ children }) {
     setUser(user);
   };
 
+  const updateUser = (next) => {
+    localStorage.setItem('cict_user', JSON.stringify(next));
+    setUser(next);
+  };
+
   const signOut = () => {
     localStorage.removeItem('cict_token');
     localStorage.removeItem('cict_user');
     setUser(null);
   };
 
-  return <AuthContext.Provider value={{ user, signIn, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, signIn, signOut, updateUser }}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);

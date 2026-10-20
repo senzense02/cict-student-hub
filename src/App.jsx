@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react';
 import { useAuth } from './context/AuthContext.jsx';
 import { pendingCount, syncAll } from './lib/offline.js';
 import { setAuthLostHandler } from './lib/liveStore.js';
+import { useLive } from './lib/live.js';
+import { api } from './api.js';
 import Icon from './components/Icon.jsx';
 import Avatar from './components/Avatar.jsx';
+import CardStatus from './components/CardStatus.jsx';
 import LiveBadge from './components/LiveBadge.jsx';
 import Login from './pages/Login.jsx';
 import ReviewBoard from './pages/ReviewBoard.jsx';
@@ -38,8 +41,9 @@ function Brand() {
 }
 
 export default function App() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, updateUser } = useAuth();
   const role = user && (ROLE_LABEL[user.role] ? user.role : 'student'); // unknown/old roles get student access
+  const showCard = role === 'student' || role === 'staff'; // admins manage cards from the ID cards tab
   const tabs = user ? TABS.filter((t) => t.roles.includes(role)) : [];
   const [tab, setTab] = useState(() => localStorage.getItem('cict_tab'));
 
@@ -61,6 +65,14 @@ export default function App() {
     setAuthLostHandler(signOut);
     return () => setAuthLostHandler(null);
   }, [signOut]);
+
+  // Keep the card status right when an admin links or changes the card, and when the saved login is from an older version
+  const refreshMe = () => {
+    if (!user || user.role === 'admin') return;
+    api('/auth/me').then(({ user: me }) => updateUser({ ...user, ...me })).catch(() => {});
+  };
+  useEffect(() => { refreshMe(); }, [user?.id]);
+  useLive(['users'], refreshMe);
 
   if (!user) return <Login />;
 
@@ -88,7 +100,10 @@ export default function App() {
             })}
           </nav>
           <div className="mt-auto rounded-3xl bg-paper p-3">
-            <LiveBadge className="mb-3" />
+            <div className="mb-3 flex flex-wrap gap-2">
+              {showCard && <CardStatus />}
+              <LiveBadge />
+            </div>
             <div className="flex items-center gap-3">
               <Avatar name={user.name} size={38} />
               <div className="min-w-0">
@@ -104,7 +119,8 @@ export default function App() {
           <div className="flex items-center justify-between bg-rail px-5 py-3 md:hidden">
             <Brand />
             <div className="flex items-center gap-2">
-              <LiveBadge />
+              <LiveBadge compact />
+              {showCard && <CardStatus compact />}
               <button onClick={signOut} className="btn btn-soft btn-sm"><Icon name="logout" size={15} />Log out</button>
             </div>
           </div>
