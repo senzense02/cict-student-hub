@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import Banner, { useBanner } from '../components/Banner.jsx';
 import ScanControls from '../components/ScanControls.jsx';
@@ -6,7 +6,8 @@ import SyncBar from '../components/SyncBar.jsx';
 import PageHeader from '../components/PageHeader.jsx';
 import Ring from '../components/Ring.jsx';
 import Avatar from '../components/Avatar.jsx';
-import { store, uid, refreshStudents, refreshVenue, pendingCount } from '../lib/offline.js';
+import { store, uid, refreshStudents, refreshVenue, pendingCount, syncAll } from '../lib/offline.js';
+import { useLive } from '../lib/live.js';
 import { nextDoorAction, doorStats } from '../lib/logic.js';
 
 const LABEL = { CHECK_IN: 'Checked in', RE_ENTRY: 'Welcome back', TEMPORARY_EXIT: 'Temporary exit' };
@@ -38,6 +39,21 @@ export default function DoorScanner() {
     loadFromServer();
   }, []);
 
+  // Cards linked (or students added) by an admin reach this phone within seconds
+  useLive(['users'], () => refreshStudents().then(setStudents).catch(() => {}));
+
+  // Upload each tap right after it happens so the admin sees it live. Offline? It stays queued and
+  // goes up when the connection returns.
+  const syncTimer = useRef(null);
+  const syncSoon = () => {
+    clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => {
+      if (!navigator.onLine) return;
+      syncAll(user.role).catch(() => {}).finally(() => setPending(pendingCount(user.role)));
+    }, 700);
+  };
+  useEffect(() => () => clearTimeout(syncTimer.current), []);
+
   const byToken = useMemo(() => new Map(students.filter((s) => s.nfcToken).map((s) => [s.nfcToken, s])), [students]);
 
   const onToken = (token) => {
@@ -60,6 +76,7 @@ export default function DoorScanner() {
       setRecent((r) => [{ at: scannedAt, text: `${student.name}, ${LABEL[action].toLowerCase()}`, kind }, ...r].slice(0, 8));
     }
     setPending(pendingCount(user.role));
+    syncSoon();
   };
 
   const stats = doorStats(students, venue);
@@ -113,7 +130,7 @@ export default function DoorScanner() {
             <div className="overflow-hidden rounded-3xl border border-line bg-white">
               {recent.length === 0 && <p className="note p-4">Scans from this session appear here.</p>}
               {recent.map((r, i) => (
-                <div key={i} className="row">
+                <div key={r.at} className={`row ${i === 0 ? 'flash' : ''}`}>
                   <span className="flex items-center gap-3 text-sm"><span className={`h-2.5 w-2.5 rounded-full ${DOT[r.kind]}`} />{r.text}</span>
                   <span className="text-xs text-muted tabular-nums">{new Date(r.at).toLocaleTimeString()}</span>
                 </div>

@@ -63,7 +63,33 @@
   .row { @apply flex items-center justify-between gap-3 border-b border-line/70 px-4 py-3 last:border-b-0; }
 }
 
-/* A scan result answers a tap, so it gets one short motion. Nothing else animates on its own. */
+/* Light motion, kept deliberately small: only opacity and transform are animated (cheap even on
+   old phones), every effect is short, and all of it is switched off for people who ask for reduced motion. */
 @keyframes pop { from { transform: scale(0.97); opacity: 0.5; } to { transform: none; opacity: 1; } }
-.pop { animation: pop 0.18s ease-out; }
-@media (prefers-reduced-motion: reduce) { .pop { animation: none; } }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slide-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes tick { 0% { transform: scale(1); } 40% { transform: scale(1.16); } 100% { transform: scale(1); } }
+@keyframes flash { from { background-color: var(--color-plum-200); } to { background-color: transparent; } }
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgb(58 138 93 / 0.5); } 70%, 100% { box-shadow: 0 0 0 7px rgb(58 138 93 / 0); } }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+.pop { animation: pop 0.18s ease-out; }                                  /* a scan result */
+.page-in { animation: rise 0.26s ease-out both; }                         /* switching tabs */
+.rise { animation: rise 0.32s ease-out both; animation-delay: calc(var(--i, 0) * 45ms); } /* cards, one after another */
+.fade-in { animation: fade 0.2s ease-out both; }
+.slide-in { animation: slide-in 0.24s ease-out both; }                    /* banners */
+.tick { animation: tick 0.28s ease-out; transform-origin: center; }       /* a number that just changed */
+.flash { animation: flash 1.6s ease-out; }                                /* a row that just arrived */
+.live-dot { animation: pulse-ring 1.8s ease-out infinite; }
+.skeleton { background: linear-gradient(90deg, var(--color-rail) 25%, #f7eff3 50%, var(--color-rail) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+.ring-arc { transition: stroke-dashoffset 0.7s ease; }
+
+.btn, .chip { transition-property: color, background-color, border-color, opacity, transform; transition-duration: 0.15s; }
+.btn:active:not(:disabled), .chip:active { transform: scale(0.97); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pop, .page-in, .rise, .fade-in, .slide-in, .tick, .flash, .live-dot, .skeleton { animation: none; }
+  .ring-arc { transition: none; }
+  .btn:active:not(:disabled), .chip:active { transform: none; }
+}

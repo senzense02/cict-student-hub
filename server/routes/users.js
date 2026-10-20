@@ -6,6 +6,7 @@ import { one, query } from '../db.js';
 import auth, { requireRole } from '../middleware/auth.js';
 import { asyncHandler, isDuplicate, str } from '../lib.js';
 import { removeFile } from '../storage.js';
+import { bump } from '../live.js';
 
 const router = express.Router();
 router.use(auth, requireRole('admin'));
@@ -43,6 +44,7 @@ router.post('/', asyncHandler(async (req, res) => {
     if (isDuplicate(err)) return res.status(409).json({ message: 'That ID is already taken' });
     throw err;
   }
+  await bump('users');
   res.status(201).json({ id, studentId, name, role });
 }));
 
@@ -65,6 +67,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
     `UPDATE resources SET score = (SELECT CAST(COALESCE(SUM(value), 0) AS INTEGER) FROM resource_votes WHERE resource_id = resources.id)`
   );
   await Promise.all(files.map((f) => removeFile(f.storage_key)));
+  await Promise.all([bump('users'), bump('resources'), bump('door')]); // their uploads, votes and door taps change too
   res.json({ ok: true });
 }));
 

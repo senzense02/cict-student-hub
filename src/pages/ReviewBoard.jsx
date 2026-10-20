@@ -1,18 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useLive } from '../lib/live.js';
+import { mergeResources } from '../lib/logic.js';
 import ResourceCard from '../components/ResourceCard.jsx';
 import UploadModal from '../components/UploadModal.jsx';
 import PageHeader from '../components/PageHeader.jsx';
 import Ring from '../components/Ring.jsx';
 import Icon from '../components/Icon.jsx';
 
-const EPOCH = '1970-01-01T00:00:00.000Z';
-
 const part = () => {
   const h = new Date().getHours();
   return h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
 };
+
+const toQuery = (filters) => new URLSearchParams(Object.entries(filters).filter(([, v]) => v)).toString();
 
 function Chips({ label, value, options, onChange }) {
   return (
@@ -33,12 +35,19 @@ export default function ReviewBoard() {
     courseCode: '', q: '', sort: 'top', verified: '',
   });
   const [items, setItems] = useState([]);
+  const [incoming, setIncoming] = useState([]); // reviewers other people posted while this page was open
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showUpload, setShowUpload] = useState(false);
-  const [tick, setTick] = useState(0); // bump to reload the list
-  const [fresh, setFresh] = useState(0); // reviewers other people posted since this list was loaded
-  const baseline = useRef(null); // newest upload time as of the last load
+
+  // Latest values for the live updater, which runs outside React's render cycle
+  const filtersRef = useRef(filters);
+  const itemsRef = useRef(items);
+  const loadingRef = useRef(true);
+  const freshRef = useRef([]); // the newest full list from the server
+  filtersRef.current = filters;
+  itemsRef.current = items;
+  loadingRef.current = loading;
 
   const set = (k) => (e) => setFilters({ ...filters, [k]: e.target.value });
   const pick = (k) => (v) => setFilters({ ...filters, [k]: v });
@@ -49,35 +58,39 @@ export default function ReviewBoard() {
       setLoading(true);
       setError('');
       try {
-        const params = new URLSearchParams(Object.entries(filters).filter(([, v]) => v));
-        setItems(await api(`/resources?${params}`));
-        // remember "now" so we can tell when someone else posts something new
-        api('/resources/updates').then((r) => { baseline.current = r.latest || EPOCH; setFresh(0); }).catch(() => {});
+        const list = await api(`/resources?${toQuery(filters)}`);
+        if (filtersRef.current !== filters) return; // the filters changed again while we waited
+        freshRef.current = list;
+        setItems(list);
+        setIncoming([]);
       } catch (err) {
         setError(err.message);
       } finally {
-        setLoading(false);
+        if (filtersRef.current === filters) setLoading(false);
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [filters, tick]);
+  }, [filters]);
 
-  // While the page stays open, quietly check for new reviewers (only when the tab is visible)
-  useEffect(() => {
-    const check = async () => {
-      if (document.visibilityState !== 'visible' || !baseline.current) return;
-      try {
-        const r = await api(`/resources/updates?since=${encodeURIComponent(baseline.current)}`);
-        setFresh(r.count);
-      } catch { /* offline or signed out: try again next time */ }
-    };
-    const timer = setInterval(check, 45000);
-    document.addEventListener('visibilitychange', check);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', check);
-    };
-  }, []);
+  // Something changed on the server: refresh what is on screen quietly. Votes and verified badges
+  // update in place; brand new reviewers wait behind the "Show" button.
+  const syncLive = async () => {
+    const mine = filtersRef.current;
+    try {
+      const list = await api(`/resources?${toQuery(mine)}`);
+      if (filtersRef.current !== mine) return;
+      const { merged, incoming: news } = mergeResources(itemsRef.current, list, user.id);
+      freshRef.current = list;
+      setItems(merged);
+      setIncoming(news);
+    } catch { /* offline: the next change will try again */ }
+  };
+  useLive(['resources'], () => { if (!loadingRef.current) syncLive(); });
+
+  const showIncoming = () => {
+    setItems(freshRef.current);
+    setIncoming([]);
+  };
 
   const replace = (updated) => setItems((prev) => prev.map((r) => (r._id === updated._id ? updated : r)));
   const act = async (id, path, body) => {
@@ -87,7 +100,6 @@ export default function ReviewBoard() {
       setError(err.message);
     }
   };
-
   const remove = async (id) => {
     if (!confirm('Delete this reviewer for everyone? This cannot be undone.')) return;
     try {
@@ -127,23 +139,29 @@ export default function ReviewBoard() {
             </div>
           </div>
 
-          {fresh > 0 && (
-            <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-plum-700 px-4 py-3 text-white">
-              <span className="text-sm">{fresh} new {fresh === 1 ? 'reviewer was' : 'reviewers were'} posted</span>
-              <button onClick={() => setTick((t) => t + 1)} className="btn btn-sm bg-white text-plum-900 hover:bg-plum-100">Show</button>
+          {incoming.length > 0 && (
+            <div role="status" className="slide-in mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-plum-700 px-4 py-3 text-white">
+              <span className="text-sm">{incoming.length} new {incoming.length === 1 ? 'reviewer was' : 'reviewers were'} posted</span>
+              <button onClick={showIncoming} className="btn btn-sm bg-white text-plum-900 hover:bg-plum-100">Show</button>
             </div>
           )}
           {error && <p className="alert mb-4" role="alert">{error}</p>}
-          {loading && <p className="note">Loading reviewers</p>}
+
+          {loading && items.length === 0 && (
+            <div className="grid gap-4 md:grid-cols-2" aria-busy="true">
+              <p className="sr-only">Loading reviewers</p>
+              {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-44 rounded-3xl" />)}
+            </div>
+          )}
           {!loading && items.length === 0 && (
-            <div className="rounded-3xl bg-lilac p-8">
+            <div className="fade-in rounded-3xl bg-lilac p-8">
               <p className="font-display text-xl font-medium">Nothing here yet</p>
               <p className="note mt-1">No reviewers match these filters. Widen the filters, or upload the first one.</p>
             </div>
           )}
-          <div className="grid gap-4 md:grid-cols-2">
-            {items.map((r) => (
-              <ResourceCard key={r._id} resource={r} onVote={(id, value) => act(id, 'vote', { value })} canVerify={isAdmin} onVerify={(id) => act(id, 'verify')} canDelete={isAdmin} onDelete={remove} />
+          <div className={`grid gap-4 transition-opacity md:grid-cols-2 ${loading && items.length > 0 ? 'opacity-60' : ''}`}>
+            {items.map((r, i) => (
+              <ResourceCard key={r._id} index={i} resource={r} onVote={(id, value) => act(id, 'vote', { value })} canVerify={isAdmin} onVerify={(id) => act(id, 'verify')} canDelete={isAdmin} onDelete={remove} />
             ))}
           </div>
         </div>
@@ -153,7 +171,7 @@ export default function ReviewBoard() {
             <p className="text-sm text-muted">Showing now</p>
             <div className="mt-3 flex items-center justify-between gap-3">
               <div>
-                <p className="font-display text-4xl font-medium tabular-nums">{items.length}</p>
+                <p key={items.length} className="tick font-display text-4xl font-medium tabular-nums">{items.length}</p>
                 <p className="text-sm">reviewers</p>
               </div>
               <Ring value={verifiedCount} total={items.length} color="var(--color-ok)" />

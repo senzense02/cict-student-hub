@@ -6,6 +6,7 @@ import studentRoutes from './routes/students.js';
 import attendanceRoutes from './routes/attendance.js';
 import resourceRoutes from './routes/resources.js';
 import adminRoutes from './routes/admin.js';
+import liveRoutes from './routes/live.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -28,6 +29,7 @@ app.use('/api/students', studentRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/live', liveRoutes);
 app.use('/api', (req, res) => res.status(404).json({ message: 'Not found' }));
 
 // Central error handler (bad input, upload limits, database errors, ...)

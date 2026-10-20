@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './context/AuthContext.jsx';
-import { syncAll } from './lib/offline.js';
+import { pendingCount, syncAll } from './lib/offline.js';
+import { setAuthLostHandler } from './lib/liveStore.js';
 import Icon from './components/Icon.jsx';
 import Avatar from './components/Avatar.jsx';
+import LiveBadge from './components/LiveBadge.jsx';
 import Login from './pages/Login.jsx';
 import ReviewBoard from './pages/ReviewBoard.jsx';
 import Overview from './pages/Overview.jsx';
@@ -41,13 +43,24 @@ export default function App() {
   const tabs = user ? TABS.filter((t) => t.roles.includes(role)) : [];
   const [tab, setTab] = useState(() => localStorage.getItem('cict_tab'));
 
-  // When the connection comes back, upload anything queued while offline
+  // Upload anything queued while offline: when the connection comes back, and every 20 seconds
+  // while something is still waiting (covers a failed attempt)
   useEffect(() => {
-    if (!user || user.role === 'student') return;
+    if (!user || user.role === 'student') return undefined;
     const run = () => syncAll(user.role).catch(() => {});
     window.addEventListener('online', run);
-    return () => window.removeEventListener('online', run);
+    const retry = setInterval(() => { if (navigator.onLine && pendingCount(user.role) > 0) run(); }, 20000);
+    return () => {
+      window.removeEventListener('online', run);
+      clearInterval(retry);
+    };
   }, [user]);
+
+  // If the server says this login is no longer valid (account deleted, token expired), sign out at once
+  useEffect(() => {
+    setAuthLostHandler(signOut);
+    return () => setAuthLostHandler(null);
+  }, [signOut]);
 
   if (!user) return <Login />;
 
@@ -75,6 +88,7 @@ export default function App() {
             })}
           </nav>
           <div className="mt-auto rounded-3xl bg-paper p-3">
+            <LiveBadge className="mb-3" />
             <div className="flex items-center gap-3">
               <Avatar name={user.name} size={38} />
               <div className="min-w-0">
@@ -89,10 +103,13 @@ export default function App() {
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center justify-between bg-rail px-5 py-3 md:hidden">
             <Brand />
-            <button onClick={signOut} className="btn btn-soft btn-sm"><Icon name="logout" size={15} />Log out</button>
+            <div className="flex items-center gap-2">
+              <LiveBadge />
+              <button onClick={signOut} className="btn btn-soft btn-sm"><Icon name="logout" size={15} />Log out</button>
+            </div>
           </div>
           <main className="flex-1 p-5 pb-28 md:p-9 md:pb-9">
-            <View key={current.id} onNavigate={choose} />
+            <div key={current.id} className="page-in"><View onNavigate={choose} /></div>
           </main>
         </div>
       </div>

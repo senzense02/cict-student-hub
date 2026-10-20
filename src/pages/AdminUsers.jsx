@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import PageHeader from '../components/PageHeader.jsx';
 import Avatar from '../components/Avatar.jsx';
+import { useLive } from '../lib/live.js';
 
 const ROLE_LABEL = { student: 'Student', staff: 'Event staff', admin: 'Admin' };
 
@@ -13,6 +14,7 @@ export default function AdminUsers() {
 
   const load = () => api('/users').then(setUsers).catch((e) => setMsg(e.message));
   useEffect(() => { load(); }, []);
+  useLive(['users'], load);
 
   const create = async (e) => {
     e.preventDefault();

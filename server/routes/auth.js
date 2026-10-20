@@ -6,6 +6,7 @@ import { one, query } from '../db.js';
 import auth, { jwtSecret } from '../middleware/auth.js';
 import { asyncHandler, isDuplicate, normalizeToken, str } from '../lib.js';
 import { bucketFor, clearFails, isBlocked, recordFail } from '../throttle.js';
+import { bump } from '../live.js';
 
 const router = express.Router();
 
@@ -57,6 +58,7 @@ router.post('/register', asyncHandler(async (req, res) => {
     if (isDuplicate(err)) return res.status(409).json({ message: 'Student ID is already registered' });
     throw err;
   }
+  await bump('users');
   const user = await one('SELECT * FROM users WHERE id = $1', [id]);
   res.status(201).json({ token: sign(user), user: publicUser(user) });
 }));

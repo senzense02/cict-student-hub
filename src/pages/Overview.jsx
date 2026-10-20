@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import PageHeader from '../components/PageHeader.jsx';
 import Ring from '../components/Ring.jsx';
+import { useFresh, useLive } from '../lib/live.js';
 
 const ACTION = { CHECK_IN: 'checked in', RE_ENTRY: 'came back in', TEMPORARY_EXIT: 'stepped out', UNKNOWN_CARD: 'tapped an unregistered card' };
 const DOT = { CHECK_IN: 'bg-ok', RE_ENTRY: 'bg-ok', TEMPORARY_EXIT: 'bg-warn', UNKNOWN_CARD: 'bg-bad' };
@@ -20,10 +21,15 @@ export default function Overview({ onNavigate }) {
 
   useEffect(() => {
     load();
-    // keep it fresh while the page stays open
-    const t = setInterval(() => document.visibilityState === 'visible' && load(), 30000);
+    // the live feed does the real work; this only keeps "today" correct across midnight
+    const t = setInterval(() => document.visibilityState === 'visible' && load(), 60000);
     return () => clearInterval(t);
   }, []);
+  useLive(['door', 'resources', 'users'], load);
+
+  // rows that just arrived flash once
+  const freshTaps = useFresh(data ? data.recent.map((e) => e.clientId) : []);
+  const freshPending = useFresh(data ? data.pendingResources.map((r) => r._id) : []);
 
   const verify = async (id) => {
     try { await api(`/resources/${id}/verify`, { method: 'POST' }); load(); } catch (e) { setError(e.message); }
@@ -70,7 +76,7 @@ export default function Overview({ onNavigate }) {
         {tiles.map((t) => (
           <div key={t.label} className={`tile ${t.tint} flex items-center justify-between gap-2`}>
             <div>
-              <p className="font-display text-[2.4rem] font-medium leading-none tabular-nums">{t.n}</p>
+              <p key={t.n} className="tick font-display text-[2.4rem] font-medium leading-none tabular-nums">{t.n}</p>
               <p className="mt-1.5 text-sm">{t.label}</p>
               <p className="text-xs text-ink/70">{t.sub}</p>
             </div>
@@ -99,7 +105,7 @@ export default function Overview({ onNavigate }) {
             <div className="overflow-hidden rounded-3xl border border-line bg-white">
               {pendingResources.length === 0 && <p className="note p-4">Every reviewer has been verified.</p>}
               {pendingResources.map((r) => (
-                <div key={r._id} className="row flex-wrap">
+                <div key={r._id} className={`row flex-wrap ${freshPending.has(r._id) ? 'flash' : ''}`}>
                   <span className="min-w-0 text-sm">
                     <span className="block truncate font-medium">{r.title}</span>
                     <span className="text-muted">{r.courseCode}, by {r.uploader}</span>
@@ -124,7 +130,7 @@ export default function Overview({ onNavigate }) {
           <div className="overflow-hidden rounded-3xl border border-line bg-white">
             {recent.length === 0 && <p className="note p-4">No door taps yet.</p>}
             {recent.map((e) => (
-              <div key={e.clientId} className="row">
+              <div key={e.clientId} className={`row ${freshTaps.has(e.clientId) ? 'flash' : ''}`}>
                 <span className="flex min-w-0 items-center gap-3 text-sm">
                   <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${DOT[e.action]}`} />
                   <span className="truncate">{e.student ? e.student.name : 'Unknown card'} {ACTION[e.action]}</span>

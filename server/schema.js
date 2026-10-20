@@ -60,6 +60,13 @@ CREATE TABLE IF NOT EXISTS event_logs (
 CREATE INDEX IF NOT EXISTS idx_event_logs_student ON event_logs (student_id, scanned_at);
 CREATE INDEX IF NOT EXISTS idx_event_logs_time ON event_logs (scanned_at);
 
+-- Change counters. Every write that other open pages should notice bumps one, and pages poll them
+-- (GET /api/live) to know when to refresh. Counters avoid comparing timestamps, which is error-prone.
+CREATE TABLE IF NOT EXISTS live_state (
+  topic   TEXT PRIMARY KEY,
+  version INTEGER NOT NULL DEFAULT 0
+);
+
 -- Login throttling lives in the database because serverless instances do not share memory.
 CREATE TABLE IF NOT EXISTS login_attempts (
   bucket   TEXT PRIMARY KEY,

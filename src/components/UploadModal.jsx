@@ -30,8 +30,8 @@ export default function UploadModal({ defaults, onClose, onUploaded }) {
   };
 
   return (
-    <div className="fixed inset-0 z-30 grid place-items-center bg-ink/45 p-4" role="dialog" aria-modal="true" aria-labelledby="upload-title">
-      <form onSubmit={submit} className="max-h-[92vh] w-full max-w-md space-y-3 overflow-y-auto rounded-[28px] bg-paper p-6">
+    <div className="fade-in fixed inset-0 z-30 grid place-items-center bg-ink/45 p-4" role="dialog" aria-modal="true" aria-labelledby="upload-title">
+      <form onSubmit={submit} className="rise max-h-[92vh] w-full max-w-md space-y-3 overflow-y-auto rounded-[28px] bg-paper p-6">
         <h2 id="upload-title" className="text-2xl font-medium tracking-tight">Upload a reviewer</h2>
         {error && <p className="alert" role="alert">{error}</p>}
 

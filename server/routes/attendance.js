@@ -4,6 +4,7 @@ import { insertRows, tx } from '../db.js';
 import auth, { requireRole } from '../middleware/auth.js';
 import { asyncHandler, dayWindow, str, toDate, validId } from '../lib.js';
 import { doorEvents, shapeEvent, venueState } from '../door.js';
+import { bump } from '../live.js';
 
 const router = express.Router();
 router.use(auth);
@@ -26,7 +27,10 @@ router.post('/sync', requireRole('staff', 'admin'), asyncHandler(async (req, res
     accepted.events.push(clientId);
   }
   // A tap that was already uploaded is ignored (same client_id). One transaction: all or nothing.
-  await tx((q) => insertRows(q, 'event_logs', ['client_id', 'student_id', 'token', 'action', 'scanned_at', 'by_id'], rows, 'ON CONFLICT (client_id) DO NOTHING'));
+  await tx(async (q) => {
+    await insertRows(q, 'event_logs', ['client_id', 'student_id', 'token', 'action', 'scanned_at', 'by_id'], rows, 'ON CONFLICT (client_id) DO NOTHING');
+    if (rows.length) await bump('door', q);
+  });
 
   res.json({ accepted, rejected });
 }));

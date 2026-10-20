@@ -5,6 +5,8 @@ A web app for the CICT department with two parts that share one login:
 - **Review Board**: students upload and share reviewers (PDF or code/text files) and vote them up or down. Admins mark reviewers as verified and can remove them.
 - **NFC door attendance**: event staff scan student ID cards at the door (check-in, temporary exit, re-entry). Scanning works **offline** and uploads when the phone is back online. Admins review everything in the Overview and the Door log.
 
+Everything is **live**: open pages update by themselves within a few seconds (new door taps, votes, reviewers, accounts, card changes) without refreshing.
+
 There are three roles: **student**, **event staff** and **admin**. Students register themselves; the admin creates staff and admin accounts.
 
 ## What each role sees
@@ -53,12 +55,13 @@ server/
   storage.js        Vercel Blob (or database fallback) for uploaded files
   door.js           door-event queries shared by the attendance and admin routes
   throttle.js       login attempt limiter (stored in Postgres)
+  live.js           change counters that power live updates
   middleware/auth.js
-  routes/           auth, users, students, attendance, resources, admin
+  routes/           auth, users, students, attendance, resources, admin, live
 src/
   pages/            Overview, ReviewBoard, DoorScanner, DoorLog, Cards, AdminUsers, Login
-  components/       shared UI, UpdateNotice (new-version banner)
-  lib/              offline queue, door logic
+  components/       shared UI, LiveBadge, UpdateNotice (new-version banner)
+  lib/              offline queue, door logic, liveStore.js (shared poller), live.js (React hooks)
 public/sw.js        service worker
 vite.config.js      build; writes /version.json and names the service-worker cache per deploy
 vercel.json         Vercel settings
@@ -117,16 +120,33 @@ ALTER TABLE users DROP COLUMN IF EXISTS section;
 DELETE FROM users WHERE role = 'teacher';
 ```
 
-## Update notices
+## Live updates
 
-- **New version**: every deploy writes a build id to `/version.json`. A page that stays open checks it every minute (and when the tab becomes visible again). If a newer deploy exists, a banner offers **Refresh**. Nothing reloads by itself, so a scan in progress is never interrupted, and scans waiting to upload stay saved on the phone.
-- **New reviewers**: while the Review Board is open, it checks every 45 seconds for reviewers other people posted and shows "N new reviewers were posted" with a **Show** button.
-- The service worker cache is named after the build id, so there is no manual cache version to bump.
+Vercel functions cannot hold a WebSocket open, so live updates use a small **change feed** instead:
+
+1. Every write that other people's screens should notice (a vote, an upload, a door tap, a new account, a card link) bumps a counter in the `live_state` table, in the same transaction as the write.
+2. Every signed-in page asks `GET /api/live` every **3 seconds** while the tab is visible. The answer is a few bytes: `{ topics: { resources: 12, door: 40, users: 5 }, build: "..." }`. One shared poller serves the whole app.
+3. When a counter moves, only the pages that care re-fetch their data: the Overview and Door log follow `door`, `resources` and `users`; the Review Board follows `resources`; ID cards, Users and the Door scanner follow `users`.
+
+What you see:
+
+- **Live badge** (sidebar, or the top bar on phones): green "Live" while connected, amber "Reconnecting" when the server cannot be reached. It recovers by itself.
+- **Review Board**: other people's votes and the verified badge update in place without reordering the cards under you. Reviewers posted by other people appear behind a **"N new reviewers were posted"** banner with a **Show** button. A "new" reviewer is one that is not on screen, was posted after everything that is, and is not yours; nothing is guessed from clocks.
+- **Overview and Door log**: numbers and rows update on their own; new rows flash briefly.
+- **Door scanner**: each tap is uploaded about a second after it happens (so the admin sees it live). Offline it stays queued and uploads when the connection returns, and a failed upload is retried every 20 seconds.
+- **New version**: the feed also carries the deployed build id, so a page that is open learns about a new deploy within seconds and shows "A new version is ready" with **Refresh**. Nothing reloads by itself, so a scan in progress is never interrupted. `/version.json` is a backup check every minute.
+- **Signed out remotely**: if an admin deletes your account, the page signs you out within seconds.
+
+Polling pauses while a tab is in the background and checks immediately when it comes back. Cost: one tiny request every 3 seconds per open, visible tab (about 1,200 per hour). If you ever need to save quota, raise `FAST_MS` in `src/lib/liveStore.js` (for example to `5000`).
+
+## Animations
+
+Small and cheap: pages and cards fade up (cards one after another), numbers pop when they change, new rows flash, banners slide in, progress rings animate, buttons press in, and the Review Board shows shimmering placeholders while it loads. Only `opacity` and `transform` are animated, every effect is under a third of a second (the flash is 1.6 seconds), and **all of it is turned off** for people whose device asks for reduced motion.
 
 ## User guide
 
 - **Student**: register with Student ID (like `25-1167`), name, program, year and a password. Browse the Review Board, filter by program, year or course code, upload reviewers (up to 4 MB), and vote. If an admin linked your ID card, you can also sign in by tapping the card and entering your password.
-- **Event staff**: *Door scanner* records taps at the entrance (check-in, temporary exit, re-entry) and shows who is inside. If the connection drops, keep scanning; use **Sync now** (or just reconnect) to upload.
+- **Event staff**: *Door scanner* records taps at the entrance (check-in, temporary exit, re-entry) and shows who is inside. Taps upload automatically; if the connection drops, keep scanning and they upload when it returns (or use **Sync now**).
 - **Admin**:
   - *Overview*: totals, what needs attention (students without a card, unregistered cards tapped today, no staff accounts), reviewers waiting for verification (verify or delete right there), and the latest door taps.
   - *Review board*: same as students, plus **Mark as verified** and **Delete** on every reviewer.
@@ -148,20 +168,21 @@ All routes are under `/api` and, except register/login/health, need `Authorizati
 | `GET /attendance/venue-state` | staff, admin | who is inside or outside |
 | `GET /attendance/log?date=YYYY-MM-DD` | admin | every door tap of a day |
 | `GET /admin/overview` | admin | everything on the Overview page |
+| `GET /live` | any signed-in user | change counters + deployed build id (powers live updates) |
 | `GET/POST /resources`, `GET /resources/:id/file` | any signed-in user | review board |
-| `GET /resources/updates?since=` | any signed-in user | count of new reviewers from other people |
 | `POST /resources/:id/vote` | any signed-in user | `{ "value": 1 }` or `-1`; sending the same value again removes the vote |
 | `POST /resources/:id/verify`, `DELETE /resources/:id` | admin | verify badge, remove a reviewer |
 
 ## Database
 
-Tables are created automatically (see `server/schema.js`): `users`, `resources`, `resource_votes`, `files` (fallback storage only), `event_logs`, `login_attempts`. Door taps carry a `client_id` generated on the phone, which is what makes re-sending safe.
+Tables are created automatically (see `server/schema.js`): `users`, `resources`, `resource_votes`, `files` (fallback storage only), `event_logs`, `login_attempts`, `live_state`. Door taps carry a `client_id` generated on the phone, which is what makes re-sending safe.
 
 ## Known limitations
 
 - Uploads are limited to 4 MB because Vercel rejects larger request bodies.
 - Login tokens are kept in `localStorage` (normal for a class project; a hardened version would use httpOnly cookies).
 - Web NFC is Chrome on Android only.
+- Updates arrive within about 3 seconds (polling), not instantly. True push would need a separate service such as Pusher or Ably, because Vercel functions cannot keep WebSockets open.
 - On free tiers the database sleeps after a few minutes idle; the first request afterwards takes about a second longer.
 - "Inside now" on the Overview only counts taps made today, so students who never tapped out do not stay "inside" forever.
 
@@ -171,3 +192,4 @@ Tables are created automatically (see `server/schema.js`): `users`, `resources`,
 - **Login says "Something went wrong"**: open the project's Logs in Vercel. A missing `JWT_SECRET` is reported by name.
 - **Uploads fail on Vercel but work locally**: the Blob store is not connected (or not private). Connect it and redeploy.
 - **Overview shows "today" for the wrong day**: set `APP_UTC_OFFSET_HOURS` to your time zone's offset from UTC.
+- **The Live badge stays amber**: the page cannot reach `/api/live`. Check the connection and the Vercel logs; it reconnects by itself.

@@ -4,6 +4,7 @@ import ScanControls from '../components/ScanControls.jsx';
 import PageHeader from '../components/PageHeader.jsx';
 import Avatar from '../components/Avatar.jsx';
 import { store, refreshStudents } from '../lib/offline.js';
+import { useLive } from '../lib/live.js';
 
 // Link a school ID card to a student: pick the student, tap the card, save.
 export default function Cards() {
@@ -15,6 +16,11 @@ export default function Cards() {
 
   const load = () => refreshStudents().then(setStudents).catch((e) => setMsg(`Could not load students. ${e.message}`));
   useEffect(() => { load(); }, []);
+  // new students and card changes by another admin show up by themselves
+  useLive(['users'], () => refreshStudents().then((list) => {
+    setStudents(list);
+    setSelected((prev) => prev && (list.find((s) => s.id === prev.id) || prev));
+  }).catch(() => {}));
 
   const pick = (s) => { setSelected(s); setToken(s.nfcToken || ''); setMsg(''); };
 

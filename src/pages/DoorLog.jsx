@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import PageHeader from '../components/PageHeader.jsx';
 import Avatar from '../components/Avatar.jsx';
 import { toCsv } from '../lib/logic.js';
+import { useFresh, useLive } from '../lib/live.js';
 
 const LABEL = { CHECK_IN: 'Checked in', RE_ENTRY: 'Came back in', TEMPORARY_EXIT: 'Temporary exit', UNKNOWN_CARD: 'Unregistered card' };
 const DOT = { CHECK_IN: 'bg-ok', RE_ENTRY: 'bg-ok', TEMPORARY_EXIT: 'bg-warn', UNKNOWN_CARD: 'bg-bad' };
@@ -21,15 +22,17 @@ export default function DoorLog() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const load = () => {
-    setLoading(true);
-    setError('');
+  // silent = a live refresh: no spinner, and a failed attempt is ignored (the next change tries again)
+  const load = (silent = false) => {
+    if (!silent) { setLoading(true); setError(''); }
     api(`/attendance/log?date=${date}`)
       .then((r) => setEvents(r.events))
-      .catch((e) => setError(e.message))
+      .catch((e) => { if (!silent) setError(e.message); })
       .finally(() => setLoading(false));
   };
-  useEffect(load, [date]);
+  useEffect(() => { load(); }, [date]);
+  useLive(['door', 'users'], () => { if (date === todayLocal()) load(true); }); // only "today" can change
+  const freshTaps = useFresh(events.map((e) => e.clientId));
 
   const shown = useMemo(() => (action === 'ALL' ? events : events.filter((e) => e.action === action)), [events, action]);
   const peopleCount = new Set(events.filter((e) => e.student).map((e) => e.student.id)).size;
@@ -65,7 +68,7 @@ export default function DoorLog() {
             <button key={v} className="chip" aria-pressed={action === v} onClick={() => setAction(v)}>{text}</button>
           ))}
         </div>
-        <button onClick={load} className="btn-text">Refresh</button>
+        <button onClick={() => load()} className="btn-text">Refresh</button>
       </div>
 
       <p className="note mb-3">{events.length} taps from {peopleCount} {peopleCount === 1 ? 'student' : 'students'} on this day.</p>
@@ -75,7 +78,7 @@ export default function DoorLog() {
         {loading && <p className="note p-4">Loading</p>}
         {!loading && shown.length === 0 && <p className="note p-4">No taps match.</p>}
         {!loading && shown.map((e) => (
-          <div key={e.clientId} className="row flex-wrap">
+          <div key={e.clientId} className={`row flex-wrap ${freshTaps.has(e.clientId) ? 'flash' : ''}`}>
             <span className="flex min-w-0 items-center gap-3">
               <Avatar name={e.student?.name || '?'} size={32} />
               <span className="min-w-0 text-sm">

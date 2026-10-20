@@ -4,7 +4,7 @@ import { tintFor } from './Avatar.jsx';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 
-export default function ResourceCard({ resource, onVote, canVerify, onVerify, canDelete, onDelete }) {
+export default function ResourceCard({ resource, index = 0, onVote, canVerify, onVerify, canDelete, onDelete }) {
   const [previewUrl, setPreviewUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -43,13 +43,13 @@ export default function ResourceCard({ resource, onVote, canVerify, onVerify, ca
 
   const vote = (value, icon, label) => (
     <button onClick={() => onVote(resource._id, value)} aria-label={label} aria-pressed={resource.myVote === value}
-      className={`grid h-8 w-8 place-items-center rounded-full transition-colors ${resource.myVote === value ? 'bg-plum-700 text-white' : 'text-plum-700 hover:bg-plum-100'}`}>
+      className={`grid h-8 w-8 place-items-center rounded-full transition active:scale-90 ${resource.myVote === value ? 'bg-plum-700 text-white' : 'text-plum-700 hover:bg-plum-100'}`}>
       <Icon name={icon} size={18} />
     </button>
   );
 
   return (
-    <article className={`${tintFor(resource.courseCode)} flex flex-col gap-4 rounded-3xl p-5`}>
+    <article style={{ '--i': Math.min(index, 8) }} className={`${tintFor(resource.courseCode)} rise flex flex-col gap-4 rounded-3xl p-5`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-wrap gap-1.5 text-[13px]">
           <span className="rounded-full bg-white px-3 py-1 font-medium text-plum-900">{resource.courseCode}</span>
@@ -75,7 +75,7 @@ export default function ResourceCard({ resource, onVote, canVerify, onVerify, ca
         </div>
         <div className="flex items-center rounded-full bg-white p-0.5" role="group" aria-label="Rating">
           {vote(1, 'up', 'Upvote')}
-          <span className="min-w-6 text-center text-sm font-semibold tabular-nums">{resource.score}</span>
+          <span key={resource.score} className="tick min-w-6 text-center text-sm font-semibold tabular-nums">{resource.score}</span>
           {vote(-1, 'down', 'Downvote')}
         </div>
       </div>

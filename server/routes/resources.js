@@ -8,6 +8,7 @@ import { one, query, tx } from '../db.js';
 import auth, { requireRole } from '../middleware/auth.js';
 import { asyncHandler, httpError, iso, str } from '../lib.js';
 import { openFile, removeFile, saveFile } from '../storage.js';
+import { bump } from '../live.js';
 
 const router = express.Router();
 router.use(auth);
@@ -115,25 +116,8 @@ router.post('/', uploadOne, asyncHandler(async (req, res) => {
     await removeFile(storageKey); // don't leave an orphan file behind
     throw err;
   }
+  await bump('resources');
   res.status(201).json(await getShaped(id, req.user.id));
-}));
-
-// GET /api/resources/updates?since=<ISO time>
-// Cheap check used by open Review Board pages: how many reviewers did other people post since `since`?
-// Without `since` it just returns the newest upload time, which the page keeps as its starting point.
-router.get('/updates', asyncHandler(async (req, res) => {
-  const latest = (await one('SELECT MAX(created_at) AS latest FROM resources'))?.latest ?? null;
-  let count = 0;
-  if (req.query.since) {
-    const since = new Date(String(req.query.since));
-    if (Number.isNaN(since.getTime())) return res.status(400).json({ message: 'Invalid since' });
-    const row = await one(
-      'SELECT CAST(COUNT(*) AS INTEGER) AS n FROM resources WHERE created_at > $1 AND uploader_id <> $2',
-      [since, req.user.id]
-    );
-    count = Number(row.n);
-  }
-  res.json({ latest: iso(latest), count });
 }));
 
 // GET /api/resources/:id/file  -> the file itself (PDFs inline; everything else as plain text)
@@ -161,6 +145,7 @@ router.post('/:id/verify', requireRole('admin'), asyncHandler(async (req, res) =
     [req.params.id, req.user.id]
   );
   if (!rows.length) return res.status(404).json({ message: 'Resource not found' });
+  await bump('resources');
   res.json(await getShaped(req.params.id, req.user.id));
 }));
 
@@ -169,6 +154,7 @@ router.delete('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
   const rows = await query('DELETE FROM resources WHERE id = $1 RETURNING storage_key', [req.params.id]);
   if (!rows.length) return res.status(404).json({ message: 'Resource not found' });
   await removeFile(rows[0].storage_key);
+  await bump('resources');
   res.json({ ok: true });
 }));
 
@@ -197,6 +183,7 @@ router.post('/:id/vote', asyncHandler(async (req, res) => {
        WHERE id = $1`,
       [req.params.id]
     );
+    await bump('resources', q);
   });
   res.json(await getShaped(req.params.id, req.user.id));
 }));
