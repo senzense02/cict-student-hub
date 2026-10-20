@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import ResourceCard from '../components/ResourceCard.jsx';
@@ -6,6 +6,8 @@ import UploadModal from '../components/UploadModal.jsx';
 import PageHeader from '../components/PageHeader.jsx';
 import Ring from '../components/Ring.jsx';
 import Icon from '../components/Icon.jsx';
+
+const EPOCH = '1970-01-01T00:00:00.000Z';
 
 const part = () => {
   const h = new Date().getHours();
@@ -24,7 +26,7 @@ function Chips({ label, value, options, onChange }) {
 
 export default function ReviewBoard() {
   const { user } = useAuth();
-  const canVerify = user.role === 'teacher' || user.role === 'admin';
+  const isAdmin = user.role === 'admin'; // admins verify and delete reviewers
   const [filters, setFilters] = useState({
     program: user.program || 'ALL',
     yearLevel: user.yearLevel ? String(user.yearLevel) : 'ALL',
@@ -34,6 +36,9 @@ export default function ReviewBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showUpload, setShowUpload] = useState(false);
+  const [tick, setTick] = useState(0); // bump to reload the list
+  const [fresh, setFresh] = useState(0); // reviewers other people posted since this list was loaded
+  const baseline = useRef(null); // newest upload time as of the last load
 
   const set = (k) => (e) => setFilters({ ...filters, [k]: e.target.value });
   const pick = (k) => (v) => setFilters({ ...filters, [k]: v });
@@ -46,6 +51,8 @@ export default function ReviewBoard() {
       try {
         const params = new URLSearchParams(Object.entries(filters).filter(([, v]) => v));
         setItems(await api(`/resources?${params}`));
+        // remember "now" so we can tell when someone else posts something new
+        api('/resources/updates').then((r) => { baseline.current = r.latest || EPOCH; setFresh(0); }).catch(() => {});
       } catch (err) {
         setError(err.message);
       } finally {
@@ -53,7 +60,24 @@ export default function ReviewBoard() {
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [filters]);
+  }, [filters, tick]);
+
+  // While the page stays open, quietly check for new reviewers (only when the tab is visible)
+  useEffect(() => {
+    const check = async () => {
+      if (document.visibilityState !== 'visible' || !baseline.current) return;
+      try {
+        const r = await api(`/resources/updates?since=${encodeURIComponent(baseline.current)}`);
+        setFresh(r.count);
+      } catch { /* offline or signed out: try again next time */ }
+    };
+    const timer = setInterval(check, 45000);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, []);
 
   const replace = (updated) => setItems((prev) => prev.map((r) => (r._id === updated._id ? updated : r)));
   const act = async (id, path, body) => {
@@ -64,12 +88,22 @@ export default function ReviewBoard() {
     }
   };
 
+  const remove = async (id) => {
+    if (!confirm('Delete this reviewer for everyone? This cannot be undone.')) return;
+    try {
+      await api(`/resources/${id}`, { method: 'DELETE' });
+      setItems((prev) => prev.filter((r) => r._id !== id));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const verifiedCount = items.filter((r) => r.verified).length;
   const where = `${filters.program === 'ALL' ? 'all programs' : filters.program}${filters.yearLevel === 'ALL' ? '' : `, year ${filters.yearLevel}`}`;
 
   return (
     <>
-      <PageHeader title={`Good ${part()}, ${user.name.split(' ')[0]}`} sub={`Reviewers for ${where}. Teacher-verified ones are marked so you know which to trust.`}>
+      <PageHeader title={`Good ${part()}, ${user.name.split(' ')[0]}`} sub={`Reviewers for ${where}. Verified ones were checked by an admin, so you know which to trust.`}>
         <button onClick={() => setShowUpload(true)} className="btn btn-primary"><Icon name="plus" size={18} />Upload reviewer</button>
       </PageHeader>
 
@@ -93,6 +127,12 @@ export default function ReviewBoard() {
             </div>
           </div>
 
+          {fresh > 0 && (
+            <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-plum-700 px-4 py-3 text-white">
+              <span className="text-sm">{fresh} new {fresh === 1 ? 'reviewer was' : 'reviewers were'} posted</span>
+              <button onClick={() => setTick((t) => t + 1)} className="btn btn-sm bg-white text-plum-900 hover:bg-plum-100">Show</button>
+            </div>
+          )}
           {error && <p className="alert mb-4" role="alert">{error}</p>}
           {loading && <p className="note">Loading reviewers</p>}
           {!loading && items.length === 0 && (
@@ -103,7 +143,7 @@ export default function ReviewBoard() {
           )}
           <div className="grid gap-4 md:grid-cols-2">
             {items.map((r) => (
-              <ResourceCard key={r._id} resource={r} onVote={(id, value) => act(id, 'vote', { value })} canVerify={canVerify} onVerify={(id) => act(id, 'verify')} />
+              <ResourceCard key={r._id} resource={r} onVote={(id, value) => act(id, 'vote', { value })} canVerify={isAdmin} onVerify={(id) => act(id, 'verify')} canDelete={isAdmin} onDelete={remove} />
             ))}
           </div>
         </div>
@@ -118,7 +158,7 @@ export default function ReviewBoard() {
               </div>
               <Ring value={verifiedCount} total={items.length} color="var(--color-ok)" />
             </div>
-            <p className="mt-3 text-sm text-ink/70">{verifiedCount} of {items.length} verified by a teacher.</p>
+            <p className="mt-3 text-sm text-ink/70">{verifiedCount} of {items.length} verified by an admin.</p>
           </div>
           <div className="tile bg-blush">
             <p className="font-display text-xl font-medium leading-snug">Notes that helped you can help the next batch.</p>

@@ -2,21 +2,34 @@
 
 A web app for the CICT department with two parts that share one login:
 
-- **Review Board**: students upload and share reviewers (PDF or code/text files), vote them up or down, and teachers mark them as verified.
-- **NFC Attendance**: staff scan student ID cards at the door (check-in, temporary exit, re-entry) and teachers take class attendance with taps. Scanning works **offline** and uploads when the phone is back online.
+- **Review Board**: students upload and share reviewers (PDF or code/text files) and vote them up or down. Admins mark reviewers as verified and can remove them.
+- **NFC door attendance**: event staff scan student ID cards at the door (check-in, temporary exit, re-entry). Scanning works **offline** and uploads when the phone is back online. Admins review everything in the Overview and the Door log.
 
-Roles: `student`, `teacher`, `staff`, `admin`. Students register themselves; the admin creates teacher and staff accounts.
+There are three roles: **student**, **event staff** and **admin**. Students register themselves; the admin creates staff and admin accounts.
+
+## What each role sees
+
+| Tab | Student | Event staff | Admin |
+|---|:-:|:-:|:-:|
+| Review board (browse, upload, vote) | yes | yes | yes, plus verify and delete |
+| Door scanner | | yes | |
+| Overview (counts, things needing attention, recent door taps) | | | yes |
+| Door log (every tap of a day, CSV export) | | | yes |
+| ID cards (link or unlink a student's card) | | | yes |
+| Users (create staff/admin accounts, reset passwords, delete) | | | yes |
+
+Admins land on **Overview**, staff land on **Door scanner**. Staff can read the student list (the scanner needs it to recognise cards) but cannot link or change cards.
 
 ## Tech stack
 
 | Layer | Choice | Why |
 |---|---|---|
-| UI | React 18, Vite, Tailwind CSS 4 | Unchanged from the original project |
-| API | Express 4 running as a **Vercel serverless function** | One project and one URL: no CORS, no second host, no cold-sleeping free server |
-| Database | **PostgreSQL** (Neon, added from the Vercel Marketplace) | The data is relational (users, sessions, marks, votes) and Postgres enforces uniqueness and valid values in the database itself |
-| File storage | **Vercel Blob (private store)** | PDFs do not belong in the database. Files are never public: they are only served after the login check |
-| Auth | JWT (14 days) + bcrypt password hashes | Same behaviour as before |
-| Offline | Service worker + `localStorage` queue | Same behaviour as before |
+| UI | React 18, Vite, Tailwind CSS 4 | Fast, simple, installable on phones |
+| API | Express 4 running as a **Vercel serverless function** | One project and one URL: no CORS, no second host |
+| Database | **PostgreSQL** (Neon, added from the Vercel Marketplace) | The data is relational and Postgres enforces uniqueness and valid values itself |
+| File storage | **Vercel Blob (private store)** | PDFs do not belong in the database; files are only served after the login check |
+| Auth | JWT (14 days) + bcrypt password hashes | |
+| Offline | Service worker + `localStorage` queue | |
 
 ```
 Browser / Android phone (React + service worker)
@@ -38,11 +51,16 @@ server/
   db.js             connection pool, transactions, first-run setup (tables + first admin)
   schema.js         the SQL tables
   storage.js        Vercel Blob (or database fallback) for uploaded files
+  door.js           door-event queries shared by the attendance and admin routes
   throttle.js       login attempt limiter (stored in Postgres)
   middleware/auth.js
-  routes/           auth, users, students, attendance, resources
-src/                React app (pages, components, offline queue)
+  routes/           auth, users, students, attendance, resources, admin
+src/
+  pages/            Overview, ReviewBoard, DoorScanner, DoorLog, Cards, AdminUsers, Login
+  components/       shared UI, UpdateNotice (new-version banner)
+  lib/              offline queue, door logic
 public/sw.js        service worker
+vite.config.js      build; writes /version.json and names the service-worker cache per deploy
 vercel.json         Vercel settings
 ```
 
@@ -85,16 +103,36 @@ Optional: in Project Settings under Functions, set the Function Region to Singap
 | `JWT_SECRET` | You | Signs login tokens |
 | `ADMIN_PASSWORD` | You | Password of the first admin (only used while no admin exists) |
 | `ADMIN_ID` | You, optional (default `admin`) | Login ID of the first admin |
+| `APP_UTC_OFFSET_HOURS` | You, optional (default `8`) | School time zone, used for "today" in the Overview and Door log |
 | `BLOB_STORE_ID` / OIDC token | Added when a Blob store is connected | Private file storage |
 | `BLOB_READ_WRITE_TOKEN` | Optional, for local development | Use Blob from your computer |
 
+### Already deployed an earlier version?
+
+The new version still runs on the same database. To remove what the old version left behind, run this once in the Neon SQL Editor (Neon dashboard, SQL Editor):
+
+```sql
+DROP TABLE IF EXISTS class_marks, class_sessions;
+ALTER TABLE users DROP COLUMN IF EXISTS section;
+DELETE FROM users WHERE role = 'teacher';
+```
+
+## Update notices
+
+- **New version**: every deploy writes a build id to `/version.json`. A page that stays open checks it every minute (and when the tab becomes visible again). If a newer deploy exists, a banner offers **Refresh**. Nothing reloads by itself, so a scan in progress is never interrupted, and scans waiting to upload stay saved on the phone.
+- **New reviewers**: while the Review Board is open, it checks every 45 seconds for reviewers other people posted and shows "N new reviewers were posted" with a **Show** button.
+- The service worker cache is named after the build id, so there is no manual cache version to bump.
+
 ## User guide
 
-- **Student**: register with Student ID (like `25-1167`), name, program, year and a password. Browse the Review Board, filter by program, year or course code, upload reviewers (up to 4 MB), and vote. If your ID card was linked, you can also sign in by tapping the card and entering your password.
-- **Staff**: *Door Scanner* records taps at the entrance (check-in, temporary exit, re-entry). *ID Cards* links a card to a student by tapping it.
-- **Teacher**: *Class Attendance* starts a session for a course, marks students present or late with card taps (or manually: excused, absent), and exports a CSV report. Teachers can also mark reviewers as verified.
-- **Admin**: *Accounts* creates teacher, staff and admin accounts, resets passwords and deletes accounts. Admins can do everything staff and teachers can.
-- **Offline**: scans are saved on the phone and uploaded when the connection returns ("Sync" bar). Sending the same data twice never creates duplicates.
+- **Student**: register with Student ID (like `25-1167`), name, program, year and a password. Browse the Review Board, filter by program, year or course code, upload reviewers (up to 4 MB), and vote. If an admin linked your ID card, you can also sign in by tapping the card and entering your password.
+- **Event staff**: *Door scanner* records taps at the entrance (check-in, temporary exit, re-entry) and shows who is inside. If the connection drops, keep scanning; use **Sync now** (or just reconnect) to upload.
+- **Admin**:
+  - *Overview*: totals, what needs attention (students without a card, unregistered cards tapped today, no staff accounts), reviewers waiting for verification (verify or delete right there), and the latest door taps.
+  - *Review board*: same as students, plus **Mark as verified** and **Delete** on every reviewer.
+  - *Door log*: pick a day, filter by type of tap, and **Download CSV**.
+  - *ID cards*: pick a student, tap their ID, save.
+  - *Users*: create event staff and admin accounts, reset passwords, delete accounts.
 
 ## API
 
@@ -104,17 +142,20 @@ All routes are under `/api` and, except register/login/health, need `Authorizati
 |---|---|---|
 | `POST /auth/register`, `/auth/login`, `/auth/nfc-login`; `GET /auth/me` | everyone | accounts and sign-in (6 wrong tries per IP and account locks for 10 minutes) |
 | `GET/POST /users`, `PATCH /users/:id/password`, `DELETE /users/:id` | admin | account management |
-| `GET /students`, `PATCH /students/:id` | staff, teacher, admin | roster, link or remove an NFC card, set section |
-| `POST /attendance/sync` | staff (door taps), teacher (sessions and marks), admin | idempotent upload from a phone |
+| `GET /students` | staff, admin | roster for the scanner |
+| `PATCH /students/:id` | admin | link or remove an NFC card |
+| `POST /attendance/sync` | staff | idempotent upload of door taps |
 | `GET /attendance/venue-state` | staff, admin | who is inside or outside |
-| `GET /attendance/sessions`, `GET /attendance/sessions/:clientId` | teacher, admin | class sessions and their marks |
+| `GET /attendance/log?date=YYYY-MM-DD` | admin | every door tap of a day |
+| `GET /admin/overview` | admin | everything on the Overview page |
 | `GET/POST /resources`, `GET /resources/:id/file` | any signed-in user | review board |
+| `GET /resources/updates?since=` | any signed-in user | count of new reviewers from other people |
 | `POST /resources/:id/vote` | any signed-in user | `{ "value": 1 }` or `-1`; sending the same value again removes the vote |
-| `POST /resources/:id/verify` | teacher, admin | toggle the verified badge |
+| `POST /resources/:id/verify`, `DELETE /resources/:id` | admin | verify badge, remove a reviewer |
 
 ## Database
 
-Tables are created automatically (see `server/schema.js`): `users`, `resources`, `resource_votes`, `files` (fallback storage only), `event_logs`, `class_sessions`, `class_marks`, `login_attempts`. Door taps, sessions and marks carry a `client_id` generated on the phone, which is what makes re-sending safe.
+Tables are created automatically (see `server/schema.js`): `users`, `resources`, `resource_votes`, `files` (fallback storage only), `event_logs`, `login_attempts`. Door taps carry a `client_id` generated on the phone, which is what makes re-sending safe.
 
 ## Known limitations
 
@@ -122,10 +163,11 @@ Tables are created automatically (see `server/schema.js`): `users`, `resources`,
 - Login tokens are kept in `localStorage` (normal for a class project; a hardened version would use httpOnly cookies).
 - Web NFC is Chrome on Android only.
 - On free tiers the database sleeps after a few minutes idle; the first request afterwards takes about a second longer.
+- "Inside now" on the Overview only counts taps made today, so students who never tapped out do not stay "inside" forever.
 
 ## Troubleshooting
 
 - **`/api/health` says DATABASE_URL is missing**: connect the Neon database in the Storage tab, then redeploy.
 - **Login says "Something went wrong"**: open the project's Logs in Vercel. A missing `JWT_SECRET` is reported by name.
 - **Uploads fail on Vercel but work locally**: the Blob store is not connected (or not private). Connect it and redeploy.
-- **Phones show an old version after a deploy**: change `CACHE` in `public/sw.js` (for example `cict-shell-v4`) before deploying.
+- **Overview shows "today" for the wrong day**: set `APP_UTC_OFFSET_HOURS` to your time zone's offset from UTC.

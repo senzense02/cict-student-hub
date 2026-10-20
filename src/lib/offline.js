@@ -17,12 +17,6 @@ export const store = {
   setVenue: (v) => write('venue_state', v),
   events: () => read('sync_queue', []), // door taps waiting to upload
   setEvents: (v) => write('sync_queue', v),
-  sessions: () => read('class_sessions', []),
-  setSessions: (v) => write('class_sessions', v),
-  marks: () => read('class_marks', {}), // { "<sessionId>:<studentId>": mark }
-  setMarks: (v) => write('class_marks', v),
-  activeSession: () => read('active_session', null),
-  setActiveSession: (v) => write('active_session', v),
 };
 
 export const uid = () =>
@@ -43,48 +37,17 @@ export async function refreshVenue() {
 }
 
 export function pendingCount(role) {
-  const door = role === 'staff' || role === 'admin';
-  const cls = role === 'teacher' || role === 'admin';
-  let n = 0;
-  if (door) n += store.events().length;
-  if (cls) {
-    n += store.sessions().filter((s) => s.dirty).length;
-    n += Object.values(store.marks()).filter((m) => m.dirty).length;
-  }
-  return n;
+  return role === 'staff' || role === 'admin' ? store.events().length : 0;
 }
 
-// Uploads everything this role is allowed to upload. Safe to repeat: the server ignores duplicates.
+// Uploads the door taps waiting on this phone. Safe to repeat: the server ignores duplicates.
 export async function syncAll(role) {
-  const door = role === 'staff' || role === 'admin';
-  const cls = role === 'teacher' || role === 'admin';
-  const events = door ? store.events() : [];
-  const sessions = cls ? store.sessions().filter((s) => s.dirty) : [];
-  const marks = cls ? Object.values(store.marks()).filter((m) => m.dirty) : [];
-  if (!events.length && !sessions.length && !marks.length) return { sent: 0 };
+  const events = role === 'staff' || role === 'admin' ? store.events() : [];
+  if (!events.length) return { sent: 0 };
 
-  const { accepted, rejected } = await api('/attendance/sync', { method: 'POST', body: { events, sessions, marks } });
+  const { accepted, rejected } = await api('/attendance/sync', { method: 'POST', body: { events } });
 
-  const doneEvents = new Set(accepted.events);
-  store.setEvents(store.events().filter((e) => !doneEvents.has(e.clientId)));
-
-  const sentSessions = new Map(sessions.map((s) => [s.clientId, s]));
-  store.setSessions(
-    store.sessions().map((s) =>
-      accepted.sessions.includes(s.clientId) && sentSessions.get(s.clientId)?.endedAt === s.endedAt ? { ...s, dirty: false } : s
-    )
-  );
-
-  const sentMarks = new Map(marks.map((m) => [m.clientId, m]));
-  const current = store.marks();
-  for (const key of Object.keys(current)) {
-    const m = current[key];
-    const sent = sentMarks.get(m.clientId);
-    // only clear the flag if the mark wasn't changed again while the request was in flight
-    if (accepted.marks.includes(m.clientId) && sent && sent.markedAt === m.markedAt && sent.status === m.status)
-      current[key] = { ...m, dirty: false };
-  }
-  store.setMarks(current);
-
-  return { sent: accepted.events.length + accepted.sessions.length + accepted.marks.length, rejected };
+  const done = new Set(accepted.events);
+  store.setEvents(store.events().filter((e) => !done.has(e.clientId)));
+  return { sent: accepted.events.length, rejected };
 }

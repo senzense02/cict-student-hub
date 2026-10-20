@@ -1,4 +1,4 @@
-// Review board: upload, browse, vote, verify
+// Review board: upload, browse, vote. Admins verify and delete.
 import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
@@ -73,6 +73,7 @@ router.get('/', asyncHandler(async (req, res) => {
   if (courseCode) where.push(`LOWER(r.course_code) LIKE ${add(`%${likeEscape(String(courseCode).trim().toLowerCase())}%`)} ESCAPE '\\'`);
   if (q) where.push(`LOWER(r.title) LIKE ${add(`%${likeEscape(String(q).trim().toLowerCase())}%`)} ESCAPE '\\'`);
   if (verified === 'true') where.push('r.verified = TRUE');
+  if (verified === 'false') where.push('r.verified = FALSE');
 
   const order = sort === 'new' ? 'r.created_at DESC' : 'r.score DESC, r.created_at DESC';
   const rows = await query(
@@ -101,7 +102,7 @@ router.post('/', uploadOne, asyncHandler(async (req, res) => {
   const storageKey = await saveFile({ buffer: req.file.buffer, ext, contentType });
 
   const id = randomUUID();
-  const autoVerified = ['teacher', 'admin'].includes(req.user.role);
+  const autoVerified = req.user.role === 'admin';
   try {
     await query(
       `INSERT INTO resources (id, title, description, course_code, program, year_level, storage_key, content_type,
@@ -115,6 +116,24 @@ router.post('/', uploadOne, asyncHandler(async (req, res) => {
     throw err;
   }
   res.status(201).json(await getShaped(id, req.user.id));
+}));
+
+// GET /api/resources/updates?since=<ISO time>
+// Cheap check used by open Review Board pages: how many reviewers did other people post since `since`?
+// Without `since` it just returns the newest upload time, which the page keeps as its starting point.
+router.get('/updates', asyncHandler(async (req, res) => {
+  const latest = (await one('SELECT MAX(created_at) AS latest FROM resources'))?.latest ?? null;
+  let count = 0;
+  if (req.query.since) {
+    const since = new Date(String(req.query.since));
+    if (Number.isNaN(since.getTime())) return res.status(400).json({ message: 'Invalid since' });
+    const row = await one(
+      'SELECT CAST(COUNT(*) AS INTEGER) AS n FROM resources WHERE created_at > $1 AND uploader_id <> $2',
+      [since, req.user.id]
+    );
+    count = Number(row.n);
+  }
+  res.json({ latest: iso(latest), count });
 }));
 
 // GET /api/resources/:id/file  -> the file itself (PDFs inline; everything else as plain text)
@@ -131,8 +150,8 @@ router.get('/:id/file', asyncHandler(async (req, res) => {
   await pipeline(file.stream, res);
 }));
 
-// POST /api/resources/:id/verify  (teacher / admin) toggles the "verified" badge
-router.post('/:id/verify', requireRole('teacher', 'admin'), asyncHandler(async (req, res) => {
+// POST /api/resources/:id/verify  (admin) toggles the "verified" badge
+router.post('/:id/verify', requireRole('admin'), asyncHandler(async (req, res) => {
   const rows = await query(
     `UPDATE resources
      SET verified = NOT verified,
@@ -143,6 +162,14 @@ router.post('/:id/verify', requireRole('teacher', 'admin'), asyncHandler(async (
   );
   if (!rows.length) return res.status(404).json({ message: 'Resource not found' });
   res.json(await getShaped(req.params.id, req.user.id));
+}));
+
+// DELETE /api/resources/:id  (admin) removes the reviewer, its votes and its stored file
+router.delete('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
+  const rows = await query('DELETE FROM resources WHERE id = $1 RETURNING storage_key', [req.params.id]);
+  if (!rows.length) return res.status(404).json({ message: 'Resource not found' });
+  await removeFile(rows[0].storage_key);
+  res.json({ ok: true });
 }));
 
 // POST /api/resources/:id/vote   body: { value: 1 | -1 }  (sending the same value again removes the vote)

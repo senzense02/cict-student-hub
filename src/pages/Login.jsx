@@ -69,7 +69,7 @@ export default function Login() {
           <div>
             <h1 className="text-[2.3rem] font-medium leading-[1.05] tracking-[-0.03em]">{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
             <p className="mt-2 text-[15px] text-muted">
-              {mode === 'login' ? 'Sign in to find reviewers and take part in class attendance.' : 'Use your Student ID. Teachers and staff get their accounts from an admin.'}
+              {mode === 'login' ? 'Sign in to find, share and rate reviewers.' : 'Use your Student ID. Event staff get their accounts from an admin.'}
             </p>
           </div>
 

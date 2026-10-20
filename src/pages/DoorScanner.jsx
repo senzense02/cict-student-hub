@@ -104,7 +104,7 @@ export default function DoorScanner() {
             <button onClick={resetVenue} className="btn-text text-muted">Reset inside and outside on this phone</button>
           </div>
           {note && <p className="note mt-2">{note}</p>}
-          {students.filter((s) => s.nfcToken).length === 0 && <p className="mt-2 text-sm text-warn-ink">No student has a card linked yet. Link cards in the ID cards tab.</p>}
+          {students.filter((s) => s.nfcToken).length === 0 && <p className="mt-2 text-sm text-warn-ink">No student has a card linked yet. Ask an admin to link the ID cards.</p>}
         </div>
 
         <div className="grid gap-5 lg:grid-cols-2">

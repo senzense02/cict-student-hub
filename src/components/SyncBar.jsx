@@ -13,7 +13,7 @@ export default function SyncBar({ pending, onSynced }) {
     setMsg('');
     try {
       const r = await syncAll(user.role);
-      const rej = r.rejected ? r.rejected.events + r.rejected.sessions + r.rejected.marks : 0;
+      const rej = r.rejected ? r.rejected.events : 0;
       setMsg(r.sent ? `Uploaded ${r.sent} record${r.sent === 1 ? '' : 's'}.` : 'Nothing to upload.');
       if (rej) setMsg((m) => `${m} ${rej} not accepted for this account.`);
     } catch (e) {

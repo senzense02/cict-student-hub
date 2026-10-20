@@ -1,6 +1,6 @@
 // Minimal app-shell cache so the scanner pages open even with no internet.
-// Bump CACHE when you redeploy so phones pick up the new version.
-const CACHE = 'cict-shell-v3';
+// The build replaces __BUILD_ID__ on every deploy, so each deploy gets a fresh cache automatically.
+const CACHE = 'cict-shell-__BUILD_ID__';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
@@ -15,7 +15,7 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith('/api/')) return; // never cache API calls (they share this origin now)
+  if (url.pathname.startsWith('/api/') || url.pathname === '/version.json') return; // never cache API calls or the version check
 
   if (req.mode === 'navigate') {
     e.respondWith(

@@ -5,6 +5,7 @@ import userRoutes from './routes/users.js';
 import studentRoutes from './routes/students.js';
 import attendanceRoutes from './routes/attendance.js';
 import resourceRoutes from './routes/resources.js';
+import adminRoutes from './routes/admin.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -26,6 +27,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/resources', resourceRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api', (req, res) => res.status(404).json({ message: 'Not found' }));
 
 // Central error handler (bad input, upload limits, database errors, ...)

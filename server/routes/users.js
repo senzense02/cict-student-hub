@@ -12,13 +12,13 @@ router.use(auth, requireRole('admin'));
 
 router.get('/', asyncHandler(async (req, res) => {
   const users = await query(
-    `SELECT id, student_id, name, role, program, year_level, section, nfc_token
+    `SELECT id, student_id, name, role, program, year_level, nfc_token
      FROM users ORDER BY role, name LIMIT 500`
   );
   res.json(users.map((u) => ({
     id: u.id, studentId: u.student_id, name: u.name, role: u.role,
     program: u.program ?? undefined, yearLevel: u.year_level ?? undefined,
-    section: u.section || undefined, hasCard: Boolean(u.nfc_token),
+    hasCard: Boolean(u.nfc_token),
   })));
 }));
 
@@ -30,7 +30,7 @@ router.post('/', asyncHandler(async (req, res) => {
   const { role } = body;
 
   if (!studentId || !name || !password) return res.status(400).json({ message: 'ID, name and password are required' });
-  if (!['teacher', 'staff', 'admin'].includes(role)) return res.status(400).json({ message: 'Role must be teacher, staff or admin' });
+  if (!['staff', 'admin'].includes(role)) return res.status(400).json({ message: 'Role must be staff or admin' });
   if (password.length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' });
 
   const id = randomUUID();
@@ -60,6 +60,10 @@ router.delete('/:id', asyncHandler(async (req, res) => {
   const files = await query('SELECT storage_key FROM resources WHERE uploader_id = $1', [req.params.id]);
   const rows = await query('DELETE FROM users WHERE id = $1 RETURNING id', [req.params.id]);
   if (!rows.length) return res.status(404).json({ message: 'User not found' });
+  // Their votes went with them, so refresh every reviewer's score
+  await query(
+    `UPDATE resources SET score = (SELECT CAST(COALESCE(SUM(value), 0) AS INTEGER) FROM resource_votes WHERE resource_id = resources.id)`
+  );
   await Promise.all(files.map((f) => removeFile(f.storage_key)));
   res.json({ ok: true });
 }));

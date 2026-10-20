@@ -10,20 +10,6 @@ export function nextDoorAction(state) {
   return { action: 'CHECK_IN', state: 'INSIDE' };
 }
 
-// Is this student part of the class session's roster?
-export function inRoster(session, student) {
-  if (session.program !== 'ALL' && student.program !== session.program) return false;
-  if (session.yearLevel && student.yearLevel !== session.yearLevel) return false;
-  if (session.section && (student.section || '').toLowerCase() !== session.section.toLowerCase()) return false;
-  return true;
-}
-
-// 'present' or 'late' depending on how long after the start the tap happened
-export function tapStatus(session, now = Date.now()) {
-  if (!session.lateAfterMin) return 'present';
-  return now - new Date(session.startedAt).getTime() > session.lateAfterMin * 60000 ? 'late' : 'present';
-}
-
 export function doorStats(students, venue) {
   let inside = 0;
   let outside = 0;

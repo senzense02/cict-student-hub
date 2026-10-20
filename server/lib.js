@@ -16,15 +16,24 @@ export const toDate = (v) => {
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? new Date() : d;
 };
-export const toInt = (v) => {
-  const n = Number(v);
-  return v && Number.isFinite(n) ? Math.trunc(n) : null;
-};
 export const str = (v, max = 200) => String(v ?? '').trim().slice(0, max);
 export const iso = (v) => (v == null ? null : new Date(v).toISOString());
 
-// "$1,$2,$3" (start = 1)
-export const placeholders = (n, start = 1) => Array.from({ length: n }, (_, i) => `$${start + i}`).join(',');
-
 // Postgres unique_violation
 export const isDuplicate = (err) => err?.code === '23505';
+
+// The calendar day (in the school's time zone) as a [from, to) pair of UTC dates.
+// Default offset is UTC+8 (Philippines); change it with APP_UTC_OFFSET_HOURS.
+export function dayWindow(date) {
+  const hours = Number(process.env.APP_UTC_OFFSET_HOURS);
+  const offset = (process.env.APP_UTC_OFFSET_HOURS && Number.isFinite(hours) ? hours : 8) * 3600_000;
+  let y, m, d;
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) [y, m, d] = date.split('-').map(Number);
+  else {
+    const t = new Date(Date.now() + offset);
+    [y, m, d] = [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()];
+  }
+  const start = Date.UTC(y, m - 1, d) - offset;
+  const label = new Date(start + offset).toISOString().slice(0, 10);
+  return { date: label, from: new Date(start), to: new Date(start + 86400_000) };
+}

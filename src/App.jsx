@@ -5,20 +5,26 @@ import Icon from './components/Icon.jsx';
 import Avatar from './components/Avatar.jsx';
 import Login from './pages/Login.jsx';
 import ReviewBoard from './pages/ReviewBoard.jsx';
-import ClassAttendance from './pages/ClassAttendance.jsx';
+import Overview from './pages/Overview.jsx';
+import DoorLog from './pages/DoorLog.jsx';
 import DoorScanner from './pages/DoorScanner.jsx';
 import Cards from './pages/Cards.jsx';
 import AdminUsers from './pages/AdminUsers.jsx';
 
 // Which tabs each role can see
+//  student: the review board
+//  staff:   door scanner (+ review board)
+//  admin:   overview, review board (verify/delete), door log, ID cards, users
 const TABS = [
-  { id: 'board', label: 'Review board', icon: 'board', roles: ['student', 'teacher', 'staff', 'admin'], view: ReviewBoard },
-  { id: 'class', label: 'Class attendance', icon: 'class', roles: ['teacher', 'admin'], view: ClassAttendance },
-  { id: 'door', label: 'Door scanner', icon: 'door', roles: ['staff', 'admin'], view: DoorScanner },
-  { id: 'cards', label: 'ID cards', icon: 'card', roles: ['teacher', 'staff', 'admin'], view: Cards },
+  { id: 'overview', label: 'Overview', icon: 'overview', roles: ['admin'], view: Overview },
+  { id: 'board', label: 'Review board', icon: 'board', roles: ['student', 'staff', 'admin'], view: ReviewBoard },
+  { id: 'door', label: 'Door scanner', icon: 'door', roles: ['staff'], view: DoorScanner },
+  { id: 'log', label: 'Door log', icon: 'log', roles: ['admin'], view: DoorLog },
+  { id: 'cards', label: 'ID cards', icon: 'card', roles: ['admin'], view: Cards },
   { id: 'users', label: 'Users', icon: 'users', roles: ['admin'], view: AdminUsers },
 ];
-const ROLE_LABEL = { student: 'Student', teacher: 'Teacher', staff: 'Event staff', admin: 'Admin' };
+const HOME = { admin: 'overview', staff: 'door' }; // where each role lands the first time
+const ROLE_LABEL = { student: 'Student', staff: 'Event staff', admin: 'Admin' };
 
 function Brand() {
   return (
@@ -31,8 +37,9 @@ function Brand() {
 
 export default function App() {
   const { user, signOut } = useAuth();
-  const tabs = user ? TABS.filter((t) => t.roles.includes(user.role)) : [];
-  const [tab, setTab] = useState(() => localStorage.getItem('cict_tab') || 'board');
+  const role = user && (ROLE_LABEL[user.role] ? user.role : 'student'); // unknown/old roles get student access
+  const tabs = user ? TABS.filter((t) => t.roles.includes(role)) : [];
+  const [tab, setTab] = useState(() => localStorage.getItem('cict_tab'));
 
   // When the connection comes back, upload anything queued while offline
   useEffect(() => {
@@ -44,7 +51,7 @@ export default function App() {
 
   if (!user) return <Login />;
 
-  const current = tabs.find((t) => t.id === tab) || tabs[0];
+  const current = tabs.find((t) => t.id === tab) || tabs.find((t) => t.id === HOME[role]) || tabs[0];
   const View = current.view;
   const choose = (id) => {
     setTab(id);
@@ -72,7 +79,7 @@ export default function App() {
               <Avatar name={user.name} size={38} />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{user.name}</p>
-                <p className="text-xs text-muted">{ROLE_LABEL[user.role]}</p>
+                <p className="text-xs text-muted">{ROLE_LABEL[role]}</p>
               </div>
             </div>
             <button onClick={signOut} className="btn btn-soft btn-sm mt-3 w-full"><Icon name="logout" size={15} />Log out</button>
@@ -85,7 +92,7 @@ export default function App() {
             <button onClick={signOut} className="btn btn-soft btn-sm"><Icon name="logout" size={15} />Log out</button>
           </div>
           <main className="flex-1 p-5 pb-28 md:p-9 md:pb-9">
-            <View key={current.id} />
+            <View key={current.id} onNavigate={choose} />
           </main>
         </div>
       </div>

@@ -1,6 +1,7 @@
 const PATHS = {
   board: <><rect x="3" y="3" width="7" height="7" rx="2.2" /><rect x="14" y="3" width="7" height="7" rx="2.2" /><rect x="3" y="14" width="7" height="7" rx="2.2" /><rect x="14" y="14" width="7" height="7" rx="2.2" /></>,
-  class: <><rect x="5" y="4" width="14" height="17" rx="3" /><path d="M9 3.5h6M9 12.5l2 2 4-4.5" /></>,
+  overview: <path d="M5 20v-7M12 20V5M19 20v-10" />,
+  log: <><rect x="5" y="3.5" width="14" height="17" rx="3" /><path d="M9 8.5h6M9 12h6M9 15.5h3.5" /></>,
   door: <><path d="M6 21V4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21M3 21h18" /><circle cx="14.5" cy="12.5" r="0.9" fill="currentColor" stroke="none" /></>,
   card: <><rect x="3" y="5" width="18" height="14" rx="3.5" /><circle cx="9" cy="11" r="2" /><path d="M6.3 16c.7-1.4 1.7-2 2.7-2s2 .6 2.7 2M14.5 10h3.5M14.5 13.5H17" /></>,
   users: <><circle cx="9" cy="8" r="3.2" /><path d="M3 20c.6-3.4 3-5 6-5s5.4 1.6 6 5" /><circle cx="17" cy="9" r="2.4" /><path d="M17.5 14.2c2 .3 3.2 1.7 3.5 4" /></>,

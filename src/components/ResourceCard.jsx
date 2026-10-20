@@ -4,7 +4,7 @@ import { tintFor } from './Avatar.jsx';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 
-export default function ResourceCard({ resource, onVote, canVerify, onVerify }) {
+export default function ResourceCard({ resource, onVote, canVerify, onVerify, canDelete, onDelete }) {
   const [previewUrl, setPreviewUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -84,6 +84,7 @@ export default function ResourceCard({ resource, onVote, canVerify, onVerify }) 
         {isPdf && <button onClick={togglePreview} disabled={busy} className="btn-text">{busy ? 'Loading' : previewUrl ? 'Hide preview' : 'Preview'}</button>}
         <button onClick={openFile} className="btn-text">{isPdf ? 'Open or download' : 'View file'}</button>
         {canVerify && <button onClick={() => onVerify(resource._id)} className="btn-text">{resource.verified ? 'Remove verification' : 'Mark as verified'}</button>}
+        {canDelete && <button onClick={() => onDelete(resource._id)} className="btn-text text-bad-ink">Delete</button>}
       </div>
       {err && <p className="text-xs text-bad-ink">{err}</p>}
       {previewUrl && <iframe title={resource.title} src={previewUrl} className="h-[480px] w-full rounded-2xl border border-line bg-white" />}

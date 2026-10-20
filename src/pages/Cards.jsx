@@ -11,13 +11,12 @@ export default function Cards() {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(null);
   const [token, setToken] = useState('');
-  const [section, setSection] = useState('');
   const [msg, setMsg] = useState('');
 
   const load = () => refreshStudents().then(setStudents).catch((e) => setMsg(`Could not load students. ${e.message}`));
   useEffect(() => { load(); }, []);
 
-  const pick = (s) => { setSelected(s); setToken(s.nfcToken || ''); setSection(s.section || ''); setMsg(''); };
+  const pick = (s) => { setSelected(s); setToken(s.nfcToken || ''); setMsg(''); };
 
   const save = async (body) => {
     try {
@@ -70,10 +69,6 @@ export default function Cards() {
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => save({ nfcToken: token })} disabled={!token} className="btn btn-primary">Save card</button>
                 {selected.nfcToken && <button onClick={() => { setToken(''); save({ nfcToken: '' }); }} className="btn btn-line">Unlink card</button>}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <input value={section} onChange={(e) => setSection(e.target.value)} placeholder="Section, like A" aria-label="Section" className="field max-w-[200px]" />
-                <button onClick={() => save({ section })} className="btn btn-line">Save section</button>
               </div>
               {msg && <p className="note" role="status">{msg}</p>}
             </>

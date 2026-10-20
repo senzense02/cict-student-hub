@@ -24,10 +24,9 @@ const publicUser = (u) => ({
   role: u.role,
   program: u.program ?? undefined,
   yearLevel: u.year_level ?? undefined,
-  section: u.section || undefined,
 });
 
-// Self-registration is for students only. Teacher/staff accounts are created by an admin.
+// Self-registration is for students only. Staff and admin accounts are created by an admin.
 router.post('/register', asyncHandler(async (req, res) => {
   const body = req.body || {};
   const studentId = str(body.studentId, 30);
