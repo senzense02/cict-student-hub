@@ -49,7 +49,7 @@ export default function ResourceCard({ resource, index = 0, onVote, canVerify, o
   );
 
   return (
-    <article style={{ '--i': Math.min(index, 8) }} className={`${tintFor(resource.courseCode)} rise flex flex-col gap-4 rounded-3xl p-5`}>
+    <article style={{ '--i': Math.min(index, 8) }} className={`${tintFor(resource.courseCode)} rise flex min-w-0 flex-col gap-4 rounded-3xl p-5`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-wrap gap-1.5 text-[13px]">
           <span className="rounded-full bg-white px-3 py-1 font-medium text-plum-900">{resource.courseCode}</span>

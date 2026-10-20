@@ -133,7 +133,7 @@ export default function ReviewBoard() {
         <button onClick={() => setShowUpload(true)} className="btn btn-primary"><Icon name="plus" size={18} />Upload reviewer</button>
       </PageHeader>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_280px]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="min-w-0">
           <div className="mb-5">
             <button type="button" className="btn btn-line btn-sm" aria-expanded={filtersOpen} aria-controls="review-filters" onClick={toggleFilters}>
@@ -175,7 +175,7 @@ export default function ReviewBoard() {
           {error && <p className="alert mb-4" role="alert">{error}</p>}
 
           {loading && items.length === 0 && (
-            <div className="grid gap-4 md:grid-cols-2" aria-busy="true">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2" aria-busy="true">
               <p className="sr-only">Loading reviewers</p>
               {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-44 rounded-3xl" />)}
             </div>
@@ -186,7 +186,7 @@ export default function ReviewBoard() {
               <p className="note mt-1">No reviewers match these filters. Widen the filters, or upload the first one.</p>
             </div>
           )}
-          <div className={`grid gap-4 transition-opacity md:grid-cols-2 ${loading && items.length > 0 ? 'opacity-60' : ''}`}>
+          <div className={`grid grid-cols-1 gap-4 transition-opacity md:grid-cols-2 ${loading && items.length > 0 ? 'opacity-60' : ''}`}>
             {items.map((r, i) => (
               <ResourceCard key={r._id} index={i} resource={r} onVote={(id, value) => act(id, 'vote', { value })} canVerify={isAdmin} onVerify={(id) => act(id, 'verify')} canDelete={isAdmin} onDelete={remove} />
             ))}
