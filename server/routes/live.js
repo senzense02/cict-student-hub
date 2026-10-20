@@ -1,3 +1,5 @@
+// Change counters for the live feed (see ../live.js). Any signed-in user may call it: it only carries
+// counters, never data, and real data is still fetched through the normal authenticated routes.
 import express from 'express';
 import auth from '../middleware/auth.js';
 import { asyncHandler } from '../lib.js';

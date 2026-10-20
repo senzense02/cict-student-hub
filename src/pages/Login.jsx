@@ -1,3 +1,5 @@
+// Sign-in and student registration. Sign in with ID + password, or by tapping the school ID card
+// (tap only on a phone the student already confirmed with their password; otherwise tap + password).
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';

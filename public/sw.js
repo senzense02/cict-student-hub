@@ -2,6 +2,7 @@
 // The build replaces __BUILD_ID__ on every deploy, so each deploy gets a fresh cache automatically.
 const CACHE = 'cict-shell-__BUILD_ID__';
 
+// Take over immediately instead of waiting for every open tab to close, so a deploy is not stuck behind an old worker
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
   e.waitUntil(
@@ -17,6 +18,8 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/') || url.pathname === '/version.json') return; // never cache API calls or the version check
 
+  // Pages: network first, so a new deploy shows up, and the saved page when offline.
+  // The app is a single page, so every address is the same index.html.
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req)
@@ -30,7 +33,7 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // hashed build assets: cache-first
+  // Built files have hashed names, so a cached copy is never stale: cache first
   e.respondWith(
     caches.match(req).then(
       (hit) =>

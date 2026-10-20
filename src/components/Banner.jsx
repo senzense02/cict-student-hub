@@ -1,3 +1,5 @@
+// Big coloured result shown after each scan (green ok, yellow exit, red problem), with a short vibration
+// so staff can tell the result without looking at the screen.
 import { useEffect, useState } from 'react';
 import Icon from './Icon.jsx';
 

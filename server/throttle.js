@@ -5,6 +5,7 @@ import { one, query } from './db.js';
 const MAX_TRIES = 6;
 const WINDOW_MS = 10 * 60 * 1000;
 
+// One bucket per IP AND account/card, so one person's typos cannot lock out everyone on the same school Wi-Fi
 export const bucketFor = (req, id) => `${req.ip}|${id}`;
 
 export async function isBlocked(bucket) {

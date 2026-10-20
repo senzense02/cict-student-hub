@@ -1,3 +1,4 @@
+// Page title and subtitle; extra content (e.g. a button) goes on the right.
 export default function PageHeader({ title, sub, children }) {
   return (
     <header className="mb-7 flex flex-wrap items-end justify-between gap-4">

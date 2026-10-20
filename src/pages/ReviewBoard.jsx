@@ -1,3 +1,5 @@
+// Review board: browse and filter shared reviewers, upload, vote, and (admin) verify or delete.
+// Updates arrive live from the server; see mergeResources in lib/logic.js for how they are folded in.
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';

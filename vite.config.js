@@ -8,6 +8,8 @@ import tailwindcss from '@tailwindcss/vite';
 // to notice that a newer version exists, and the service worker cache is named after it.
 const buildId = (process.env.VERCEL_GIT_COMMIT_SHA || Date.now().toString(36)).slice(0, 12);
 
+// Stamps the build id into version.json and into sw.js. sw.js is copied from public/ untouched, so the
+// id can only be filled in after the build has finished.
 function buildVersion() {
   let outDir = 'dist';
   return {
@@ -28,7 +30,7 @@ function buildVersion() {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), buildVersion()],
-  define: { __BUILD_ID__: JSON.stringify(buildId) },
+  define: { __BUILD_ID__: JSON.stringify(buildId) }, // lets the page know its own build id to compare with version.json
   // Local development: forward /api to the Express server started by `npm run dev:api`
   server: { proxy: { '/api': 'http://localhost:5000' } },
 });

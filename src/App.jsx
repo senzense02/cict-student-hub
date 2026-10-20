@@ -1,3 +1,4 @@
+// App shell: sign-in gate, the tabs each role can see, sidebar (desktop) and bottom bar (phone).
 import { useEffect, useState } from 'react';
 import { useAuth } from './context/AuthContext.jsx';
 import { pendingCount, syncAll } from './lib/offline.js';
@@ -20,6 +21,8 @@ import AdminUsers from './pages/AdminUsers.jsx';
 //  student: the review board
 //  staff:   door scanner (+ review board)
 //  admin:   overview, review board (verify/delete), door log, ID cards, users
+// The server enforces the same rules (requireRole); hiding a tab here is only about not showing buttons
+// that would be refused.
 const TABS = [
   { id: 'overview', label: 'Overview', icon: 'overview', roles: ['admin'], view: Overview },
   { id: 'board', label: 'Review board', icon: 'board', roles: ['student', 'staff', 'admin'], view: ReviewBoard },

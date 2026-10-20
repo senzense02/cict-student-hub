@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(auth, requireRole('admin'));
 
 router.get('/overview', asyncHandler(async (req, res) => {
-  const { from: today } = dayWindow();
+  const { from: today } = dayWindow(); // midnight in the school's time zone, so "today" matches what staff see
 
   const [roles, students, resources, pending, doorToday, venue, recent] = await Promise.all([
     query('SELECT role, CAST(COUNT(*) AS INTEGER) AS n FROM users GROUP BY role'),

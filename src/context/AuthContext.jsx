@@ -1,3 +1,5 @@
+// Holds the signed-in user. The token and user are mirrored in localStorage so a page refresh, or a phone
+// with no internet, stays signed in.
 import { createContext, useContext, useState } from 'react';
 
 const AuthContext = createContext(null);
@@ -17,6 +19,7 @@ export function AuthProvider({ children }) {
     setUser(user);
   };
 
+  // For when the server reports something new about the user (e.g. an admin linked their card)
   const updateUser = (next) => {
     localStorage.setItem('cict_user', JSON.stringify(next));
     setUser(next);

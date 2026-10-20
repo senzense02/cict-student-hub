@@ -1,4 +1,4 @@
-// Door scanner data. Only staff upload taps; only admins read the full log.
+// Door scanner data. Staff (and admins) upload taps; only admins read the full log.
 import express from 'express';
 import { insertRows, tx } from '../db.js';
 import auth, { requireRole } from '../middleware/auth.js';
@@ -15,6 +15,8 @@ const okClientId = (v) => v != null && String(v).length > 0 && String(v).length 
 // Idempotent upload of everything queued on a phone. Safe to call again after a dropped connection.
 // body: { events: [] }  ->  { accepted: { events: [clientId] }, rejected: { events: n } }
 router.post('/sync', requireRole('staff', 'admin'), asyncHandler(async (req, res) => {
+  // Capped so one request cannot hold the database for long. Taps beyond the cap stay queued on the
+  // phone (only accepted ones are removed there) and go up on the next sync.
   const events = Array.isArray(req.body?.events) ? req.body.events.slice(0, 2000) : [];
   const accepted = { events: [] };
   const rejected = { events: 0 };
@@ -23,6 +25,7 @@ router.post('/sync', requireRole('staff', 'admin'), asyncHandler(async (req, res
   for (const e of events) {
     if (!okClientId(e?.clientId) || !DOOR_ACTIONS.includes(e.action)) { rejected.events++; continue; }
     const clientId = String(e.clientId);
+    // A tap with a missing or malformed student id is still kept (as an unlinked tap) rather than lost
     rows.push([clientId, validId(e.student) ? e.student : null, str(e.token, 100), e.action, toDate(e.scannedAt), req.user.id]);
     accepted.events.push(clientId);
   }
@@ -43,6 +46,7 @@ router.get('/venue-state', requireRole('staff', 'admin'), asyncHandler(async (re
 // GET /api/attendance/log?date=2026-10-18  (admin) every door tap of that day, newest first
 router.get('/log', requireRole('admin'), asyncHandler(async (req, res) => {
   const day = dayWindow(req.query.date);
+  // 5000 is far more than one day at a door produces; it only protects the size of the answer
   const rows = await doorEvents({ from: day.from, to: day.to, limit: 5000 });
   res.json({ date: day.date, events: rows.map(shapeEvent) });
 }));

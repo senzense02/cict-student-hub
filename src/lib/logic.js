@@ -4,12 +4,14 @@
 export const normalizeToken = (t = '') => String(t).replace(/[^0-9a-f]/gi, '').toUpperCase();
 
 // Door state machine. state: undefined (never scanned) | 'INSIDE' | 'OUTSIDE'
+// A tap just flips the state, so staff never have to say whether someone is arriving or leaving.
 export function nextDoorAction(state) {
   if (state === 'INSIDE') return { action: 'TEMPORARY_EXIT', state: 'OUTSIDE' };
   if (state === 'OUTSIDE') return { action: 'RE_ENTRY', state: 'INSIDE' };
   return { action: 'CHECK_IN', state: 'INSIDE' };
 }
 
+// Numbers for the four tiles on the Door scanner. A student with no tap yet counts as "not yet arrived".
 export function doorStats(students, venue) {
   let inside = 0;
   let outside = 0;
@@ -21,6 +23,9 @@ export function doorStats(students, venue) {
 }
 
 // rows: array of objects, cols: [[key, header], ...]
+// Every cell is quoted (inner quotes doubled) so a comma or quote in a name cannot break the columns,
+// and lines end with \r\n, which is what Excel expects.
+
 export function toCsv(rows, cols) {
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   return [cols.map(([, h]) => q(h)).join(','), ...rows.map((r) => cols.map(([k]) => q(r[k])).join(','))].join('\r\n');

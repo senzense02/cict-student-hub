@@ -3,6 +3,7 @@ import { query } from './db.js';
 import { iso } from './lib.js';
 
 // Who is inside / outside, from each student's latest door tap.
+// UNKNOWN_CARD taps are left out: they have no student and never change who is inside.
 // With `since`, only taps from that moment on count (the admin overview uses "today").
 export async function venueState(since = null) {
   const params = since ? [since] : [];
@@ -17,7 +18,7 @@ export async function venueState(since = null) {
        GROUP BY student_id
      ) latest ON latest.student_id = e.student_id AND latest.last_at = e.scanned_at
      WHERE e.action IN ('CHECK_IN', 'RE_ENTRY', 'TEMPORARY_EXIT')
-     ORDER BY e.created_at`,
+     ORDER BY e.created_at`, // if two taps share a time, the one uploaded last wins
     params
   );
   const state = {};
@@ -31,7 +32,7 @@ export async function doorEvents({ from = null, to = null, limit = 2000 } = {}) 
   const where = [];
   if (from) where.push(`e.scanned_at >= $${params.push(from)}`);
   if (to) where.push(`e.scanned_at < $${params.push(to)}`);
-  const max = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 5000);
+  const max = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 5000); // the limit is pasted into the SQL below, so force it to a safe whole number
   return query(
     `SELECT e.client_id, e.action, e.scanned_at, e.token, e.student_id, e.by_id,
             u.name AS student_name, u.student_id AS login_id, u.program, u.year_level, b.name AS by_name
@@ -45,6 +46,7 @@ export async function doorEvents({ from = null, to = null, limit = 2000 } = {}) 
   );
 }
 
+// The shape the browser receives. student is null for an unregistered card.
 export const shapeEvent = (r) => ({
   clientId: r.client_id,
   action: r.action,

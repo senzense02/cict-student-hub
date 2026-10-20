@@ -1,3 +1,4 @@
+// useNfc: a React hook around Web NFC, the phone's card reader (gives us a card's serial number).
 import { useEffect, useRef, useState } from 'react';
 import { normalizeToken } from './logic.js';
 
@@ -10,7 +11,7 @@ export function useNfc(onToken) {
   const [error, setError] = useState('');
   const supported = typeof window !== 'undefined' && 'NDEFReader' in window;
 
-  handler.current = onToken;
+  handler.current = onToken; // always call the newest callback, because the reader below is started only once
 
   const start = async () => {
     if (!supported) return setError('Web NFC needs Chrome on an Android phone, opened over HTTPS.');
@@ -22,7 +23,7 @@ export function useNfc(onToken) {
       reader.onreading = (e) => {
         const token = normalizeToken(e.serialNumber);
         const now = Date.now();
-        // ignore the same card read repeatedly while it is held against the phone
+        // Holding a card on the phone fires several reads, so ignore the same card within 2.5 seconds
         if (token === last.current.token && now - last.current.at < 2500) return;
         last.current = { token, at: now };
         handler.current(token);

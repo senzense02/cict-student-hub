@@ -1,3 +1,4 @@
+// Login check for protected routes (default export) and role check (requireRole).
 import jwt from 'jsonwebtoken';
 import { one } from '../db.js';
 import { httpError } from '../lib.js';
@@ -21,6 +22,8 @@ export default async function auth(req, res, next) {
       return res.status(401).json({ message: 'Invalid or expired token' });
     }
 
+    // The token only carries the id. The role is looked up on every request, so a deleted account is
+    // signed out and a role is never out of date.
     const user = await one('SELECT id, role FROM users WHERE id = $1', [String(payload.id)]);
     if (!user) return res.status(401).json({ message: 'This account no longer exists' });
     req.user = { id: user.id, role: user.role };

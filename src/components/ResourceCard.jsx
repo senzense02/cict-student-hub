@@ -1,3 +1,5 @@
+// One reviewer on the board: votes, verified badge, and an inline preview or download of the file.
+// Files sit behind the login, so they are fetched with the token and shown through a temporary blob: URL.
 import { useEffect, useState } from 'react';
 import { fetchFileUrl } from '../api.js';
 import { tintFor } from './Avatar.jsx';

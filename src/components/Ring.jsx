@@ -1,8 +1,9 @@
-// Circular progress, like the activity rings in the reference dashboards
+// Circular progress ring for the Door scanner and Review board tiles: shows `value` out of `total`.
+// -rotate-90 on the svg makes the arc start at 12 o'clock and fill clockwise (SVG circles start at 3 o'clock).
 export default function Ring({ value, total, size = 64, stroke = 8, color = 'var(--color-plum-700)', children }) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  const pct = total ? Math.min(1, value / total) : 0;
+  const pct = total ? Math.min(1, value / total) : 0; // an empty total shows an empty ring, not NaN
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }} role="img" aria-label={`${Math.round(pct * 100)} percent`}>
       <svg width={size} height={size} className="-rotate-90">

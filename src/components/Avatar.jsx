@@ -1,3 +1,4 @@
+// Initials in a circle. The tint comes from the name, so the same person always gets the same colour.
 const TINTS = ['bg-lilac', 'bg-blush', 'bg-sand', 'bg-iris'];
 
 export function tintFor(text = '') {

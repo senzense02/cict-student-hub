@@ -4,15 +4,13 @@ import jwt from 'jsonwebtoken';
 import { randomUUID } from 'node:crypto';
 import { one, query } from '../db.js';
 import auth, { jwtSecret } from '../middleware/auth.js';
-import { asyncHandler, isDuplicate, normalizeToken, str } from '../lib.js';
+import { asyncHandler, isDuplicate, isYearLevel, normalizeToken, PROGRAMS, STUDENT_ID_REGEX, str } from '../lib.js';
 import { bucketFor, clearFails, isBlocked, recordFail } from '../throttle.js';
 import { bump } from '../live.js';
 import { isTrusted, trustDevice } from '../devices.js';
 
 const router = express.Router();
 
-// Accepts "25-1167" and "2025-01234" style IDs. Adjust if your school's format differs.
-const STUDENT_ID_REGEX = /^\d{2,4}-\d{3,6}$/;
 const TOO_MANY = { message: 'Too many attempts. Wait a few minutes and try again.' };
 
 // Compared against when the account doesn't exist, so response time doesn't reveal which IDs are real
@@ -29,7 +27,8 @@ const publicUser = (u) => ({
   hasCard: Boolean(u.nfc_token),
 });
 
-// Self-registration is for students only. Staff and admin accounts are created by an admin.
+// Self-registration is for students only. Staff and student accounts can also be created by an admin
+// (routes/users.js); admin accounts can never be created through the app.
 router.post('/register', asyncHandler(async (req, res) => {
   const body = req.body || {};
   const studentId = str(body.studentId, 30);
@@ -44,9 +43,9 @@ router.post('/register', asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Invalid Student ID format (e.g. 25-1167)' });
   if (password.length < 8)
     return res.status(400).json({ message: 'Password must be at least 8 characters' });
-  if (!['BSCS', 'BSIS'].includes(program))
+  if (!PROGRAMS.includes(program))
     return res.status(400).json({ message: 'Program must be BSCS or BSIS' });
-  if (!Number.isInteger(yearLevel) || yearLevel < 1 || yearLevel > 4)
+  if (!isYearLevel(yearLevel))
     return res.status(400).json({ message: 'Year level must be 1 to 4' });
 
   const id = randomUUID();

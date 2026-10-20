@@ -1,3 +1,4 @@
+// Popup form for uploading a reviewer file (sent as multipart/form-data).
 import { useState } from 'react';
 import { api } from '../api.js';
 import Icon from './Icon.jsx';

@@ -1,3 +1,4 @@
+// Inline SVG icons, so there is no icon font or extra request to load (and they work offline).
 const PATHS = {
   board: <><rect x="3" y="3" width="7" height="7" rx="2.2" /><rect x="14" y="3" width="7" height="7" rx="2.2" /><rect x="3" y="14" width="7" height="7" rx="2.2" /><rect x="14" y="14" width="7" height="7" rx="2.2" /></>,
   overview: <path d="M5 20v-7M12 20V5M19 20v-10" />,

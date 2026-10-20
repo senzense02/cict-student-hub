@@ -7,7 +7,7 @@ A web app for the CICT department with two parts that share one login:
 
 Everything is **live**: open pages update by themselves (new door taps, votes, reviewers, accounts, card changes) without refreshing, within a few seconds by default and instantly with Neon Realtime switched on (see "Live updates").
 
-There are three roles: **student**, **event staff** and **admin**. Students register themselves; the admin creates staff and admin accounts.
+There are three roles: **student**, **event staff** and **admin**. Students register themselves; the admin can also create staff and student accounts. Admin accounts cannot be created in the app: the only admin is the one made on first start from `ADMIN_ID` and `ADMIN_PASSWORD`.
 
 ## What each role sees
 
@@ -19,7 +19,7 @@ There are three roles: **student**, **event staff** and **admin**. Students regi
 | Overview (counts, things needing attention, recent door taps) | | | yes |
 | Door log (every tap of a day, CSV export) | | | yes |
 | ID cards (link or unlink a student's card) | | | yes |
-| Users (create staff/admin accounts, reset passwords, delete) | | | yes |
+| Users (create staff/student accounts, reset passwords, delete) | | | yes |
 
 Admins land on **Overview**, staff land on **Door scanner**. Staff can read the student list (the scanner needs it to recognise cards) but cannot link or change cards.
 
@@ -177,7 +177,7 @@ Small and cheap: pages and cards fade up (cards one after another), numbers pop 
   - *Review board*: same as students, plus **Mark as verified** and **Delete** on every reviewer.
   - *Door log*: pick a day, filter by type of tap, and **Download CSV**.
   - *ID cards*: pick a student, tap their ID, save.
-  - *Users*: create event staff and admin accounts, reset passwords, delete accounts.
+  - *Users*: create event staff and student accounts (not admins), reset passwords, delete accounts.
 
 ## API
 

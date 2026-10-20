@@ -1,6 +1,7 @@
 // Local-first storage: everything the scanners need lives in localStorage so taps work with no internet.
 import { api } from '../api.js';
 
+// Blocked or corrupted storage must never crash the scanner, so fall back to the default
 const read = (k, fallback) => {
   try {
     return JSON.parse(localStorage.getItem(k)) ?? fallback;
@@ -19,6 +20,8 @@ export const store = {
   setEvents: (v) => write('sync_queue', v),
 };
 
+// A unique id per tap. The server uses it to drop duplicates, which is what makes re-sending safe.
+// (crypto.randomUUID needs HTTPS, so there is a fallback for plain-HTTP development.)
 export const uid = () =>
   crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -36,6 +39,7 @@ export async function refreshVenue() {
   return v;
 }
 
+// Only staff and admins upload taps, so a student never has anything waiting
 export function pendingCount(role) {
   return role === 'staff' || role === 'admin' ? store.events().length : 0;
 }

@@ -1,4 +1,4 @@
-// Small shared helpers
+// Small helpers shared by the server routes.
 
 // Errors with a status code. `expose` lets a 5xx message reach the browser (used for setup mistakes).
 export const httpError = (status, message, expose = false) => Object.assign(new Error(message), { status, expose });
@@ -9,18 +9,28 @@ export const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, 
 // "04:a1:b2:..." -> "04A1B2..."  (same rule as the client)
 export const normalizeToken = (t = '') => String(t).replace(/[^0-9a-f]/gi, '').toUpperCase();
 
+// Ids that arrive from phones are checked before they reach the database or the event log
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const validId = (v) => typeof v === 'string' && UUID.test(v);
 
+// A bad or missing timestamp from a phone becomes "now" instead of failing the whole upload
 export const toDate = (v) => {
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? new Date() : d;
 };
+// Trim and cap the length, so one oversized field cannot bloat a row
 export const str = (v, max = 200) => String(v ?? '').trim().slice(0, max);
 export const iso = (v) => (v == null ? null : new Date(v).toISOString());
 
 // Postgres unique_violation
 export const isDuplicate = (err) => err?.code === '23505';
+
+// Student account rules. Shared by self-registration (routes/auth.js) and by an admin creating a student
+// (routes/users.js), so both paths accept exactly the same IDs, programs and year levels.
+// Accepts "25-1167" and "2025-01234" style IDs. Adjust if your school's format differs.
+export const STUDENT_ID_REGEX = /^\d{2,4}-\d{3,6}$/;
+export const PROGRAMS = ['BSCS', 'BSIS'];
+export const isYearLevel = (n) => Number.isInteger(n) && n >= 1 && n <= 4;
 
 // The calendar day (in the school's time zone) as a [from, to) pair of UTC dates.
 // Default offset is UTC+8 (Philippines); change it with APP_UTC_OFFSET_HOURS.
