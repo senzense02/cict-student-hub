@@ -17,7 +17,6 @@ export const MIN_PUSH_POLL_MS = 5000;
 export const MAX_PUSH_POLL_MS = 50000;
 
 const changeListeners = new Set(); // (changedTopics) => void
-const statusListeners = new Set(); // (connected: boolean, push: boolean) => void
 const buildListeners = new Set();  // (buildId) => void
 let authLost = null;               // called when the server says this login is no longer valid
 
@@ -27,9 +26,7 @@ let inFlight = false;
 let timer = null;
 let snapshot = null;  // last counters we saw
 let failures = 0;
-let connected = null; // null until the first answer
 let lastBuild = null;
-let announced = { connected: undefined, push: undefined };
 
 // live connection (Neon Realtime)
 let pushClient = null;
@@ -42,12 +39,6 @@ let pushPollMs = MAX_PUSH_POLL_MS;
 const AUTH_ERRORS = /not authenticated|invalid or expired|no longer exists/i;
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 const visible = () => document.visibilityState === 'visible';
-
-function publishStatus() {
-  if (announced.connected === connected && announced.push === pushLive) return;
-  announced = { connected, push: pushLive };
-  statusListeners.forEach((fn) => fn(connected, pushLive));
-}
 
 // Compare with what we last saw and tell the pages whose data moved. Used by both transports,
 // so the same change arriving twice (push, then a poll) is only announced once.
@@ -76,12 +67,8 @@ function onPush({ status, data }) {
   if (live && data && visible()) applyTopics(Object.fromEntries(data.map((row) => [row.topic, Number(row.version)])));
   if (pushLive === live) return;
   pushLive = live;
-  if (live) {
-    failures = 0;
-    connected = true;
-  }
+  if (live) failures = 0;
   reschedule(); // live: slow down to renewal pace; not live: back to fast polling
-  publishStatus();
 }
 
 // Start the live connection, or renew the sealed query so it does not expire.
@@ -135,7 +122,6 @@ async function poll() {
     try {
       const { topics = {}, build = null, now = Date.now(), realtime = null } = await api('/live');
       failures = 0;
-      connected = true;
       applyTopics(topics);
       if (build) {
         lastBuild = build;
@@ -145,10 +131,8 @@ async function poll() {
     } catch (err) {
       if (AUTH_ERRORS.test(err.message)) authLost?.();
       failures += 1;
-      if (failures >= 2 && !pushLive) connected = false;
     } finally {
       inFlight = false;
-      publishStatus();
     }
   }
   if (running) timer = setTimeout(poll, nextDelay());
@@ -175,9 +159,7 @@ function stop() {
   timer = null;
   snapshot = null;
   failures = 0;
-  connected = null;
   lastBuild = null;
-  announced = { connected: undefined, push: undefined };
   closePush();
   document.removeEventListener('visibilitychange', wake);
   window.removeEventListener('online', wake);
@@ -186,18 +168,12 @@ function stop() {
 const hold = () => { if (holders++ === 0) start(); };
 const release = () => { if (--holders === 0) stop(); };
 
-export const getStatus = () => ({ connected, push: pushLive });
 export const setAuthLostHandler = (fn) => { authLost = fn; };
 
 export function onChange(fn) {
   changeListeners.add(fn);
   hold();
   return () => { changeListeners.delete(fn); release(); };
-}
-export function onStatus(fn) {
-  statusListeners.add(fn);
-  hold();
-  return () => { statusListeners.delete(fn); release(); };
 }
 export function onBuild(fn) {
   buildListeners.add(fn);

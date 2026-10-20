@@ -63,7 +63,7 @@ server/
   routes/           auth, users, students, attendance, resources, admin, live
 src/
   pages/            Overview, ReviewBoard, DoorScanner, DoorLog, Cards, AdminUsers, Login
-  components/       shared UI, CardStatus + CardLinkModal (card linked or not, link your own card), LiveBadge (live / reconnecting), UpdateNotice (new-version banner)
+  components/       shared UI, CardStatus + CardLinkModal (card linked or not, link your own card), UpdateNotice (new-version banner)
   lib/              offline queue, door logic, liveStore.js (shared poller), live.js (React hooks)
 public/sw.js        service worker
 vite.config.js      build; writes /version.json and names the service-worker cache per deploy
@@ -144,7 +144,7 @@ Two layers, and the second is optional:
 2. **Open the Neon Console.** If you created the database through Vercel: project, **Storage** tab, click the database, **Open in Neon**.
 3. In the Console choose your project, then **Postgres database**, then **Realtime**, then **Enable Realtime**. When it finishes the page shows `NEON_REALTIME_URL` and `NEON_REALTIME_SECRET`.
 4. In Vercel, **Settings**, **Environment Variables**, add both (Production and Preview). Add `NEON_REALTIME_DB` only if your database is not the one named in `DATABASE_URL`.
-5. **Redeploy.** Open the site, sign in, and hover the **Live** badge: it says "Updates arrive instantly" when push is working, or "checks for updates every few seconds" when it is polling. In the browser's DevTools, Network tab, filter **WS**: you should see one open WebSocket, and `/api/live` calls only about once a minute.
+5. **Redeploy.** Open the site, sign in, and open the browser's DevTools, Network tab, filter **WS**: you should see one open WebSocket, and `/api/live` calls only about once a minute.
 6. To test: open the Overview in one window and tap a card (or vote on a reviewer) in another.
 
 Running locally: put the same two variables in `.env` to try it; leave them out and the app simply polls.
@@ -154,7 +154,6 @@ Running locally: put the same two variables in `.env` to try it; leave them out 
 ### What you see
 
 - **Card status** (sidebar, or the top bar on phones, for students and event staff): shows whether your ID card is linked, and changes by itself when an admin links it for you.
-- **Live badge** (sidebar, or the top bar on phones): green "Live", or amber "Reconnecting" when the server cannot be reached. It recovers by itself.
 - **Review Board**: other people's votes and the verified badge update in place without reordering the cards under you. Reviewers posted by other people appear behind a **"N new reviewers were posted"** banner with a **Show** button. A "new" reviewer is one that is not on screen, was posted after everything that is, and is not yours; nothing is guessed from clocks.
 - **Overview and Door log**: numbers and rows update on their own; new rows flash briefly.
 - **Door scanner**: each tap is uploaded about a second after it happens (so the admin sees it live). Offline it stays queued and uploads when the connection returns, and a failed upload is retried every 20 seconds.
@@ -217,5 +216,5 @@ Tables are created automatically (see `server/schema.js`): `users`, `resources`,
 - **Login says "Something went wrong"**: open the project's Logs in Vercel. A missing `JWT_SECRET` is reported by name.
 - **Uploads fail on Vercel but work locally**: the Blob store is not connected (or not private). Connect it and redeploy.
 - **Overview shows "today" for the wrong day**: set `APP_UTC_OFFSET_HOURS` to your time zone's offset from UTC.
-- **The Live badge stays amber**: the page cannot reach `/api/live`. Check the connection and the Vercel logs; it reconnects by itself.
-- **The Live badge says "checks for updates every few seconds" after enabling Realtime**: the page is polling. Check that both variables are set for the environment you are viewing and that you redeployed; confirm Realtime shows as enabled in the Neon Console; look in the Vercel logs for "Neon Realtime is unavailable". Polling keeps everything working in the meantime.
+- **Pages stop updating by themselves**: the page cannot reach `/api/live`. Check the connection and the Vercel logs; it reconnects by itself.
+- **Updates still arrive every few seconds after enabling Realtime** (DevTools, Network, WS shows no open WebSocket): the page is polling. Check that both variables are set for the environment you are viewing and that you redeployed; confirm Realtime shows as enabled in the Neon Console; look in the Vercel logs for "Neon Realtime is unavailable". Polling keeps everything working in the meantime.

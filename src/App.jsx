@@ -7,7 +7,6 @@ import { api } from './api.js';
 import Icon from './components/Icon.jsx';
 import Avatar from './components/Avatar.jsx';
 import CardStatus from './components/CardStatus.jsx';
-import LiveBadge from './components/LiveBadge.jsx';
 import Login from './pages/Login.jsx';
 import ReviewBoard from './pages/ReviewBoard.jsx';
 import Overview from './pages/Overview.jsx';
@@ -100,10 +99,7 @@ export default function App() {
             })}
           </nav>
           <div className="mt-auto rounded-3xl bg-paper p-3">
-            <div className="mb-3 flex flex-wrap gap-2">
-              {showCard && <CardStatus />}
-              <LiveBadge />
-            </div>
+            {showCard && <CardStatus className="mb-3" />}
             <div className="flex items-center gap-3">
               <Avatar name={user.name} size={38} />
               <div className="min-w-0">
@@ -119,7 +115,6 @@ export default function App() {
           <div className="flex items-center justify-between bg-rail px-5 py-3 md:hidden">
             <Brand />
             <div className="flex items-center gap-2">
-              <LiveBadge compact />
               {showCard && <CardStatus compact />}
               <button onClick={signOut} className="btn btn-soft btn-sm"><Icon name="logout" size={15} />Log out</button>
             </div>

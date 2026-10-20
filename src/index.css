@@ -74,7 +74,6 @@
 @keyframes slide-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 @keyframes tick { 0% { transform: scale(1); } 40% { transform: scale(1.16); } 100% { transform: scale(1); } }
 @keyframes flash { from { background-color: var(--color-plum-200); } to { background-color: transparent; } }
-@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgb(58 138 93 / 0.5); } 70%, 100% { box-shadow: 0 0 0 7px rgb(58 138 93 / 0); } }
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
 .pop { animation: pop 0.18s ease-out; }                                  /* a scan result */
@@ -84,7 +83,6 @@
 .slide-in { animation: slide-in 0.24s ease-out both; }                    /* banners */
 .tick { animation: tick 0.28s ease-out; transform-origin: center; }       /* a number that just changed */
 .flash { animation: flash 1.6s ease-out; }                                /* a row that just arrived */
-.live-dot { animation: pulse-ring 1.8s ease-out infinite; }
 .skeleton { background: linear-gradient(90deg, var(--color-rail) 25%, #f7eff3 50%, var(--color-rail) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
 .ring-arc { transition: stroke-dashoffset 0.7s ease; }
 
@@ -92,7 +90,7 @@
 .btn:active:not(:disabled), .chip:active, .btn-text:active:not(:disabled) { transform: scale(0.97); }
 
 @media (prefers-reduced-motion: reduce) {
-  .pop, .page-in, .rise, .fade-in, .slide-in, .tick, .flash, .live-dot, .skeleton { animation: none; }
+  .pop, .page-in, .rise, .fade-in, .slide-in, .tick, .flash, .skeleton { animation: none; }
   .ring-arc { transition: none; }
   .btn:active:not(:disabled), .chip:active, .btn-text:active:not(:disabled) { transform: none; }
 }
