@@ -17,6 +17,7 @@ const PATHS = {
   nfc: <path d="M8.5 8.5c2.2 2.2 2.2 4.8 0 7M12.5 6c3.6 3.4 3.6 8.6 0 12M16.5 3.5c5 4.6 5 12.4 0 17" />,
   info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8v.01" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
+  filter: <><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></>,
 };
 
 export default function Icon({ name, size = 20, className = '' }) {

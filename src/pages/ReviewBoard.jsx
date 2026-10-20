@@ -39,6 +39,15 @@ export default function ReviewBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showUpload, setShowUpload] = useState(false);
+  // The filter panel can be tucked away; the choice is remembered on this device
+  const [filtersOpen, setFiltersOpen] = useState(() => {
+    try { return localStorage.getItem('cict_filters_open') !== '0'; } catch { return true; }
+  });
+  const toggleFilters = () => {
+    const next = !filtersOpen;
+    setFiltersOpen(next);
+    try { localStorage.setItem('cict_filters_open', next ? '1' : '0'); } catch { /* storage unavailable: fine */ }
+  };
 
   // Latest values for the live updater, which runs outside React's render cycle
   const filtersRef = useRef(filters);
@@ -110,6 +119,11 @@ export default function ReviewBoard() {
     }
   };
 
+  // How many filters differ from the defaults, shown on the toggle so a hidden filter is never a surprise
+  const activeFilters = [
+    filters.program !== 'ALL', filters.yearLevel !== 'ALL', filters.courseCode.trim(), filters.q.trim(),
+    filters.sort !== 'top', filters.verified,
+  ].filter(Boolean).length;
   const verifiedCount = items.filter((r) => r.verified).length;
   const where = `${filters.program === 'ALL' ? 'all programs' : filters.program}${filters.yearLevel === 'ALL' ? '' : `, year ${filters.yearLevel}`}`;
 
@@ -121,22 +135,35 @@ export default function ReviewBoard() {
 
       <div className="grid gap-6 xl:grid-cols-[1fr_280px]">
         <div className="min-w-0">
-          <div className="mb-5 space-y-3">
-            <div className="flex flex-wrap gap-x-6 gap-y-3">
-              <Chips label="Program" value={filters.program} onChange={pick('program')} options={[['ALL', 'All programs'], ['BSCS', 'BSCS'], ['BSIS', 'BSIS']]} />
-              <Chips label="Year level" value={filters.yearLevel} onChange={pick('yearLevel')} options={[['ALL', 'All years'], ['1', 'Year 1'], ['2', 'Year 2'], ['3', 'Year 3'], ['4', 'Year 4']]} />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <input className="field max-w-[190px]" placeholder="Course code" aria-label="Course code" value={filters.courseCode} onChange={set('courseCode')} />
-              <input className="field max-w-[240px]" placeholder="Search titles" aria-label="Search titles" value={filters.q} onChange={set('q')} />
-              <select className="field max-w-[160px]" aria-label="Sort" value={filters.sort} onChange={set('sort')}>
-                <option value="top">Top rated</option>
-                <option value="new">Newest</option>
-              </select>
-              <button className="chip h-11 px-4" aria-pressed={filters.verified === 'true'} onClick={() => setFilters({ ...filters, verified: filters.verified ? '' : 'true' })}>
-                <Icon name="shield" size={16} />Verified only
-              </button>
-            </div>
+          <div className="mb-5">
+            <button type="button" className="btn btn-line btn-sm" aria-expanded={filtersOpen} aria-controls="review-filters" onClick={toggleFilters}>
+              <Icon name="filter" size={16} />
+              Filters
+              {activeFilters > 0 && (
+                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-plum-700 px-1 text-[11px] font-semibold text-white" aria-label={`${activeFilters} active`}>{activeFilters}</span>
+              )}
+              <Icon name="down" size={16} className={`transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {filtersOpen && (
+              <div id="review-filters" className="slide-in mt-3 space-y-3">
+                <div className="flex flex-wrap gap-x-6 gap-y-3">
+                  <Chips label="Program" value={filters.program} onChange={pick('program')} options={[['ALL', 'All programs'], ['BSCS', 'BSCS'], ['BSIS', 'BSIS']]} />
+                  <Chips label="Year level" value={filters.yearLevel} onChange={pick('yearLevel')} options={[['ALL', 'All years'], ['1', 'Year 1'], ['2', 'Year 2'], ['3', 'Year 3'], ['4', 'Year 4']]} />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <input className="field max-w-[190px]" placeholder="Course code" aria-label="Course code" value={filters.courseCode} onChange={set('courseCode')} />
+                  <input className="field max-w-[240px]" placeholder="Search titles" aria-label="Search titles" value={filters.q} onChange={set('q')} />
+                  <select className="field max-w-[160px]" aria-label="Sort" value={filters.sort} onChange={set('sort')}>
+                    <option value="top">Top rated</option>
+                    <option value="new">Newest</option>
+                  </select>
+                  <button className="chip h-11 px-4" aria-pressed={filters.verified === 'true'} onClick={() => setFilters({ ...filters, verified: filters.verified ? '' : 'true' })}>
+                    <Icon name="shield" size={16} />Verified only
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {incoming.length > 0 && (

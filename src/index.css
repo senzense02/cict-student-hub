@@ -47,8 +47,11 @@
   .btn-primary { @apply bg-plum-700 text-white hover:bg-plum-900; }
   .btn-soft { @apply bg-plum-100 text-plum-900 hover:bg-plum-200; }
   .btn-line { @apply border border-line bg-white text-ink hover:bg-plum-100; }
-  .btn-danger { @apply bg-bad text-white hover:opacity-90; }
-  .btn-text { @apply inline-flex items-center gap-1.5 text-sm font-medium text-plum-700 underline-offset-4 hover:underline; }
+  .btn-danger { @apply bg-bad text-white hover:bg-bad-ink; }
+  /* Text buttons get the same tinted-pill hover as every other button instead of the browser's
+     underline. The negative margin cancels the padding, so the text stays where it was. */
+  .btn-text { @apply -mx-2.5 inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium text-plum-700 transition-colors hover:bg-plum-100 disabled:pointer-events-none disabled:opacity-40; }
+  .btn-text.text-bad-ink { @apply hover:bg-bad-soft; }
 
   .field { @apply h-11 w-full rounded-full border border-line bg-white px-4 text-sm placeholder:text-muted/70 focus:border-plum-500 focus:ring-2 focus:ring-plum-300/60 focus:outline-none; }
   textarea.field { @apply h-auto rounded-2xl py-3; }
@@ -85,11 +88,11 @@
 .skeleton { background: linear-gradient(90deg, var(--color-rail) 25%, #f7eff3 50%, var(--color-rail) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
 .ring-arc { transition: stroke-dashoffset 0.7s ease; }
 
-.btn, .chip { transition-property: color, background-color, border-color, opacity, transform; transition-duration: 0.15s; }
-.btn:active:not(:disabled), .chip:active { transform: scale(0.97); }
+.btn, .chip, .btn-text { transition-property: color, background-color, border-color, opacity, transform; transition-duration: 0.15s; }
+.btn:active:not(:disabled), .chip:active, .btn-text:active:not(:disabled) { transform: scale(0.97); }
 
 @media (prefers-reduced-motion: reduce) {
   .pop, .page-in, .rise, .fade-in, .slide-in, .tick, .flash, .live-dot, .skeleton { animation: none; }
   .ring-arc { transition: none; }
-  .btn:active:not(:disabled), .chip:active { transform: none; }
+  .btn:active:not(:disabled), .chip:active, .btn-text:active:not(:disabled) { transform: none; }
 }
