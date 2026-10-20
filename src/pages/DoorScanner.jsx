@@ -105,7 +105,7 @@ export default function DoorScanner() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {tiles.map((t) => (
             <div key={t.label} className={`tile ${t.tint} flex items-center justify-between gap-2`}>
-              <div>
+              <div className="min-w-0">
                 <p className="font-display text-[2.4rem] font-medium leading-none tabular-nums">{t.n}</p>
                 <p className="mt-1.5 text-sm">{t.label}</p>
               </div>
@@ -124,8 +124,8 @@ export default function DoorScanner() {
           {students.filter((s) => s.nfcToken).length === 0 && <p className="mt-2 text-sm text-warn-ink">No student has a card linked yet. Ask an admin to link the ID cards.</p>}
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-2">
-          <section aria-label="Recent scans">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <section aria-label="Recent scans" className="min-w-0">
             <h2 className="mb-2 text-xl font-medium">Recent scans</h2>
             <div className="overflow-hidden rounded-3xl border border-line bg-white">
               {recent.length === 0 && <p className="note p-4">Scans from this session appear here.</p>}
@@ -138,7 +138,7 @@ export default function DoorScanner() {
             </div>
           </section>
 
-          <section aria-label="Students">
+          <section aria-label="Students" className="min-w-0">
             <h2 className="mb-2 text-xl font-medium">Students</h2>
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name or ID" className="field mb-3" aria-label="Search students" />
             <div className="max-h-80 overflow-y-auto rounded-3xl border border-line bg-white">
