@@ -7,6 +7,7 @@ import auth, { jwtSecret } from '../middleware/auth.js';
 import { asyncHandler, isDuplicate, normalizeToken, str } from '../lib.js';
 import { bucketFor, clearFails, isBlocked, recordFail } from '../throttle.js';
 import { bump } from '../live.js';
+import { isTrusted, trustDevice } from '../devices.js';
 
 const router = express.Router();
 
@@ -80,24 +81,41 @@ router.post('/login', asyncHandler(async (req, res) => {
   res.json({ token: sign(user), user: publicUser(user) });
 }));
 
-// Sign in by tapping the school ID card AND entering the account password.
-// The card only says "which account"; the password proves it's really that student.
+// Sign in with the school ID card.
+//  - Tap only ({ token, deviceKey }): works for STUDENTS on a phone they already confirmed with their password
+//    (see devices.js). A card's serial number is not a secret, so the tap alone is never accepted.
+//  - Tap + password ({ token, password, deviceKey? }): works for anyone with a linked card. For a student it
+//    also trusts this phone, so the next sign-in is just a tap.
+// Anything the tap-only path cannot accept answers 401 with needPassword, the same for known and unknown cards.
 router.post('/nfc-login', asyncHandler(async (req, res) => {
   const body = req.body || {};
   const token = normalizeToken(body.token);
-  const password = String(body.password || '');
-  if (!token || !password) return res.status(400).json({ message: 'Tap your ID card and enter your password' });
+  const password = typeof body.password === 'string' ? body.password : '';
+  const deviceKey = typeof body.deviceKey === 'string' ? body.deviceKey : '';
+  if (!token) return res.status(400).json({ message: 'Tap your ID card' });
 
   const bucket = bucketFor(req, token);
   if (await isBlocked(bucket)) return res.status(429).json(TOO_MANY);
 
   const user = await one('SELECT * FROM users WHERE nfc_token = $1', [token]);
+
+  if (!password) {
+    if (user && user.role === 'student' && (await isTrusted(user.id, deviceKey))) {
+      await clearFails(bucket);
+      return res.json({ token: sign(user), user: publicUser(user) });
+    }
+    // A phone that never offered a key is just new, not guessing. Only a wrong key counts as a failed try.
+    if (deviceKey) await recordFail(bucket);
+    return res.status(401).json({ message: 'Enter your password to continue', needPassword: true });
+  }
+
   const ok = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
   if (!user || !ok) {
     await recordFail(bucket);
     return res.status(401).json({ message: 'Card or password is incorrect' });
   }
   await clearFails(bucket);
+  if (user.role === 'student') await trustDevice(user.id, deviceKey);
   res.json({ token: sign(user), user: publicUser(user) });
 }));
 
@@ -132,6 +150,8 @@ router.post('/card', auth, asyncHandler(async (req, res) => {
     if (isDuplicate(err)) return res.status(409).json({ message: 'That card is already linked to another account' });
     throw err;
   }
+  // The password was just confirmed, so this phone may sign in by tapping from now on (students only)
+  if (user.role === 'student') await trustDevice(user.id, body.deviceKey);
   await bump('users');
   res.json({ user: publicUser({ ...user, nfc_token: token }) });
 }));

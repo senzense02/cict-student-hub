@@ -16,7 +16,7 @@ export async function api(path, { method = 'GET', body, form } = {}) {
 
   const res = await fetch(`${BASE}${path}`, { method, headers, body: payload });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.message || 'Request failed');
+  if (!res.ok) throw Object.assign(new Error(data.message || 'Request failed'), { status: res.status, data });
   return data;
 }
 

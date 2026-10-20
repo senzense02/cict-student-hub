@@ -7,6 +7,7 @@ import auth, { requireRole } from '../middleware/auth.js';
 import { asyncHandler, isDuplicate, str } from '../lib.js';
 import { removeFile } from '../storage.js';
 import { bump } from '../live.js';
+import { forgetDevices } from '../devices.js';
 
 const router = express.Router();
 router.use(auth, requireRole('admin'));
@@ -53,6 +54,7 @@ router.patch('/:id/password', asyncHandler(async (req, res) => {
   if (password.length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' });
   const rows = await query('UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING id', [await bcrypt.hash(password, 10), req.params.id]);
   if (!rows.length) return res.status(404).json({ message: 'User not found' });
+  await forgetDevices(req.params.id); // a reset password also signs every phone out of tap-only sign-in
   res.json({ ok: true });
 }));
 

@@ -7,6 +7,7 @@ import { api } from './api.js';
 import Icon from './components/Icon.jsx';
 import Avatar from './components/Avatar.jsx';
 import CardStatus from './components/CardStatus.jsx';
+import CardLinkModal from './components/CardLinkModal.jsx';
 import Login from './pages/Login.jsx';
 import ReviewBoard from './pages/ReviewBoard.jsx';
 import Overview from './pages/Overview.jsx';
@@ -45,6 +46,16 @@ export default function App() {
   const showCard = role === 'student' || role === 'staff'; // admins manage cards from the ID cards tab
   const tabs = user ? TABS.filter((t) => t.roles.includes(role)) : [];
   const [tab, setTab] = useState(() => localStorage.getItem('cict_tab'));
+  // Right after signing up, offer to link the ID card once (Login sets this flag)
+  const [offerCard, setOfferCard] = useState(false);
+  useEffect(() => {
+    if (!user) return;
+    try { if (sessionStorage.getItem('cict_offer_card') === '1') setOfferCard(true); } catch { /* ignore */ }
+  }, [user?.id]);
+  const closeOffer = () => {
+    try { sessionStorage.removeItem('cict_offer_card'); } catch { /* ignore */ }
+    setOfferCard(false);
+  };
 
   // Upload anything queued while offline: when the connection comes back, and every 20 seconds
   // while something is still waiting (covers a failed attempt)
@@ -124,6 +135,8 @@ export default function App() {
           </main>
         </div>
       </div>
+
+      {offerCard && role === 'student' && <CardLinkModal onClose={closeOffer} />}
 
       {tabs.length > 1 && (
         <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t border-line bg-rail px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden" aria-label="Main">

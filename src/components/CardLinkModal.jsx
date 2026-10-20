@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { normalizeToken } from '../lib/logic.js';
+import { deviceKey } from '../lib/device.js';
 import ScanControls from './ScanControls.jsx';
 import Icon from './Icon.jsx';
 
@@ -29,7 +30,9 @@ export default function CardLinkModal({ onClose }) {
     setError('');
     setLoading(true);
     try {
-      const { user: me } = await api('/auth/card', { method: 'POST', body: { token: clean, password } });
+      // Students also trust this phone for tap-only sign-in; staff keep tap + password
+      const body = { token: clean, password, deviceKey: user.role === 'student' ? deviceKey({ create: true }) : undefined };
+      const { user: me } = await api('/auth/card', { method: 'POST', body });
       updateUser({ ...user, ...me });
       setDone(true);
       setPassword('');
@@ -63,14 +66,19 @@ export default function CardLinkModal({ onClose }) {
           <>
             <p className="note">
               {done
-                ? 'All set. Staff can now scan your card at the door, and you can sign in by tapping it and entering your password.'
+                ? user.role === 'student'
+                  ? 'All set. Staff can now scan your card at the door. To sign in, log out, choose "Tap ID card" and tap it: no password needed on this phone.'
+                  : 'All set. Staff can now scan your card at the door, and you can sign in by tapping it and entering your password.'
                 : 'Your ID card is linked to this account. If it needs to be changed (lost or replaced card), ask an admin.'}
             </p>
             <div className="flex justify-end"><button type="button" onClick={onClose} className="btn btn-primary">Done</button></div>
           </>
         ) : (
           <form onSubmit={submit} className="space-y-3">
-            <p className="note">Hold your school ID against the back of your phone, then confirm with your password.</p>
+            <p className="note">
+              Hold your school ID against the back of your phone, then confirm with your password.
+              {user.role === 'student' && ' After that, tapping the card signs you in on this phone without a password.'}
+            </p>
             {error && <p className="alert" role="alert">{error}</p>}
             <ScanControls onToken={(t) => { setToken(t); setError(''); }} manual={false} />
             <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="The card ID shows here after a tap" aria-label="Card ID" className="field font-mono" />

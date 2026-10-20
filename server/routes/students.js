@@ -4,6 +4,7 @@ import { query } from '../db.js';
 import auth, { requireRole } from '../middleware/auth.js';
 import { asyncHandler, isDuplicate, normalizeToken } from '../lib.js';
 import { bump } from '../live.js';
+import { forgetDevices } from '../devices.js';
 
 const router = express.Router();
 router.use(auth);
@@ -40,6 +41,7 @@ router.patch('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
     throw err;
   }
   if (!rows.length) return res.status(404).json({ message: 'Student not found' });
+  await forgetDevices(rows[0].id); // a different card (or none) means every phone must confirm with the password again
   await bump('users');
   res.json({ id: rows[0].id, nfcToken: rows[0].nfc_token || null });
 }));

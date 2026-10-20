@@ -31,7 +31,7 @@ Admins land on **Overview**, staff land on **Door scanner**. Staff can read the 
 | API | Express 4 running as a **Vercel serverless function** | One project and one URL: no CORS, no second host |
 | Database | **PostgreSQL** (Neon, added from the Vercel Marketplace) | The data is relational and Postgres enforces uniqueness and valid values itself |
 | File storage | **Vercel Blob (private store)** | PDFs do not belong in the database; files are only served after the login check |
-| Auth | JWT (14 days) + bcrypt password hashes | |
+| Auth | JWT (14 days) + bcrypt password hashes; students can also sign in by tapping their ID card on a phone they confirmed with their password | See "Card sign-in" |
 | Offline | Service worker + `localStorage` queue | |
 | Live updates | Change counters + polling, upgraded to push by **Neon Realtime** (optional, beta) | Works everywhere out of the box; instant where Realtime is available |
 
@@ -57,6 +57,7 @@ server/
   storage.js        Vercel Blob (or database fallback) for uploaded files
   door.js           door-event queries shared by the attendance and admin routes
   throttle.js       login attempt limiter (stored in Postgres)
+  devices.js        trusted phones for tap-only card sign-in
   live.js           change counters that power live updates
   realtime.js       optional Neon Realtime: seals the live query for browsers
   middleware/auth.js
@@ -169,8 +170,8 @@ Small and cheap: pages and cards fade up (cards one after another), numbers pop 
 
 ## User guide
 
-- **Student**: register with Student ID (like `25-1167`), name, program, year and a password. Browse the Review Board, filter by program, year or course code, upload reviewers (up to 4 MB), and vote. The **Card linked / Card not linked** pill (sidebar, or the top bar on phones) shows whether your ID card is linked. Tap it to link your own card: hold the ID to the back of the phone (or type the card ID), enter your password, and save. Once linked you can sign in by tapping the card and entering your password. A linked card can only be changed by an admin.
-- **Event staff**: the same card status pill is shown for your own account. *Door scanner* records taps at the entrance (check-in, temporary exit, re-entry) and shows who is inside. Taps upload automatically; if the connection drops, keep scanning and they upload when it returns (or use **Sync now**).
+- **Student**: register with Student ID (like `25-1167`), name, program, year and a password. Browse the Review Board, filter by program, year or course code, upload reviewers (up to 4 MB), and vote. The **Card linked / Card not linked** pill (sidebar, or the top bar on phones) shows whether your ID card is linked. Right after you register, a popup offers to link your card (or tap the pill any time): hold the ID to the back of the phone (or type the card ID), enter your password, and save. From then on, on that phone you can log out, choose **Tap ID card**, tap, and you are in with no password. On any other phone the first tap asks for your password once. A linked card can only be changed by an admin.
+- **Event staff**: the same card status pill is shown for your own account. Staff can link a card too, but signing in with it always needs the password as well. *Door scanner* records taps at the entrance (check-in, temporary exit, re-entry) and shows who is inside. Taps upload automatically; if the connection drops, keep scanning and they upload when it returns (or use **Sync now**).
 - **Admin**:
   - *Overview*: totals, what needs attention (students without a card, unregistered cards tapped today, no staff accounts), reviewers waiting for verification (verify or delete right there), and the latest door taps.
   - *Review board*: same as students, plus **Mark as verified** and **Delete** on every reviewer.
@@ -184,9 +185,9 @@ All routes are under `/api` and, except register/login/health, need `Authorizati
 
 | Route | Who | What |
 |---|---|---|
-| `POST /auth/register`, `/auth/login`, `/auth/nfc-login`; `GET /auth/me` | everyone | accounts and sign-in (6 wrong tries per IP and account locks for 10 minutes) |
+| `POST /auth/register`, `/auth/login`, `/auth/nfc-login`; `GET /auth/me` | everyone | accounts and sign-in (6 wrong tries per IP and account locks for 10 minutes). `nfc-login` takes `{ token, deviceKey }` (students, trusted phone) or `{ token, password, deviceKey? }`; when a tap alone is not enough it answers `401` with `needPassword: true` |
 | `GET/POST /users`, `PATCH /users/:id/password`, `DELETE /users/:id` | admin | account management |
-| `POST /auth/card` | student, staff | link your own card: `{ "token", "password" }`; refused if a card is already linked or the card belongs to someone else |
+| `POST /auth/card` | student, staff | link your own card: `{ "token", "password", "deviceKey" }`; refused if a card is already linked or the card belongs to someone else. For students it also trusts the phone for tap-only sign-in |
 | `GET /students` | staff, admin | roster for the scanner |
 | `PATCH /students/:id` | admin | link or remove an NFC card |
 | `POST /attendance/sync` | staff | idempotent upload of door taps |
@@ -200,7 +201,19 @@ All routes are under `/api` and, except register/login/health, need `Authorizati
 
 ## Database
 
-Tables are created automatically (see `server/schema.js`): `users`, `resources`, `resource_votes`, `files` (fallback storage only), `event_logs`, `login_attempts`, `live_state`. Door taps carry a `client_id` generated on the phone, which is what makes re-sending safe.
+Tables are created automatically (see `server/schema.js`): `users`, `resources`, `resource_votes`, `files` (fallback storage only), `event_logs`, `card_devices`, `login_attempts`, `live_state`. Door taps carry a `client_id` generated on the phone, which is what makes re-sending safe.
+
+## Card sign-in (tap without a password)
+
+A card's serial number is **not a secret**: any NFC phone can read it, and the door scanner's roster (which every event staff phone downloads) contains all of them. So a tap alone is never accepted by the server. Tap-only sign-in works like this:
+
+1. **Linking** (`POST /auth/card`): the student taps the card and confirms with their password. The server stores the card ID, and the browser creates a random 256-bit key (kept in `localStorage`, `cict_device`). Only its SHA-256 is stored, in `card_devices`.
+2. **Signing in** (`POST /auth/nfc-login`): the browser sends the card ID **and** that key. Both must match the same student. Logging out does not delete the key.
+3. **A phone the server does not know** (new phone, cleared browser data, key unused for 180 days) answers `needPassword`: the student enters the password once and that phone is trusted from then on. Unknown and known cards get the identical answer, so cards cannot be probed.
+
+Rules built in: students only (staff and admins always need tap + password); at most 5 trusted phones per account (least recently used drops off); a wrong key counts toward the normal lockout while a missing key does not; **changing or removing a card, or resetting the password, signs every phone out of tap-only sign-in**; deleting the account removes them.
+
+Not covered: someone with the unlocked phone, or who can read the browser's `localStorage`, can tap in. Anyone who can type a card ID can still try to link it first (the link needs only the account password), so an admin can fix a wrong link from the ID cards tab.
 
 ## Known limitations
 

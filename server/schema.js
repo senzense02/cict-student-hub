@@ -67,6 +67,17 @@ CREATE TABLE IF NOT EXISTS live_state (
   version INTEGER NOT NULL DEFAULT 0
 );
 
+-- Phones (browsers) allowed to sign in by tapping the ID card WITHOUT a password. A card's serial number is
+-- not a secret (staff see it in the roster, anyone can read it), so a tap alone is never enough: the browser
+-- must also present a random key it was given when the owner confirmed with their password. Only a hash is kept.
+CREATE TABLE IF NOT EXISTS card_devices (
+  user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key_hash     TEXT NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, key_hash)
+);
+
 -- Login throttling lives in the database because serverless instances do not share memory.
 CREATE TABLE IF NOT EXISTS login_attempts (
   bucket   TEXT PRIMARY KEY,

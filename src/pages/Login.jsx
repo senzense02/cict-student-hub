@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useNfc } from '../lib/nfc.js';
 import { normalizeToken } from '../lib/logic.js';
+import { deviceKey } from '../lib/device.js';
 import Icon from '../components/Icon.jsx';
 
 function CardArt() {
@@ -27,10 +28,11 @@ export default function Login() {
   const [via, setVia] = useState('id'); // id | card
   const [form, setForm] = useState({ studentId: '', name: '', password: '', program: 'BSCS', yearLevel: 1 });
   const [cardToken, setCardToken] = useState('');
+  const [ask, setAsk] = useState(false); // the tap alone was not enough, so ask for the password
   const [manual, setManual] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const nfc = useNfc((t) => setCardToken(t));
+  const nfc = useNfc((t) => onTap(t));
 
   useEffect(() => {
     if (cardToken) nfc.stop();
@@ -38,6 +40,27 @@ export default function Login() {
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const cardMode = mode === 'login' && via === 'card';
+  const trusted = Boolean(deviceKey()); // this phone already confirmed its owner with the password once
+
+  const resetCard = () => { setCardToken(''); setAsk(false); };
+
+  // A card was tapped. On a phone that is already trusted the tap alone signs a student in;
+  // otherwise (or if the server wants more) fall through to the password step.
+  const onTap = async (t) => {
+    setCardToken(t);
+    setError('');
+    const key = deviceKey();
+    if (!key) return setAsk(true);
+    setLoading(true);
+    try {
+      signIn(await api('/auth/nfc-login', { method: 'POST', body: { token: t, deviceKey: key } }));
+    } catch (err) {
+      if (err.data?.needPassword) setAsk(true);
+      else { setError(err.message); resetCard(); }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -45,8 +68,11 @@ export default function Login() {
     setLoading(true);
     try {
       const data = cardMode
-        ? await api('/auth/nfc-login', { method: 'POST', body: { token: cardToken, password: form.password } })
+        ? await api('/auth/nfc-login', { method: 'POST', body: { token: cardToken, password: form.password, deviceKey: deviceKey({ create: true }) } })
         : await api(`/auth/${mode}`, { method: 'POST', body: form });
+      if (mode === 'register') {
+        try { sessionStorage.setItem('cict_offer_card', '1'); } catch { /* ignore */ }
+      }
       signIn(data);
     } catch (err) {
       setError(err.message);
@@ -55,7 +81,15 @@ export default function Login() {
     }
   };
 
-  const switchMode = (m) => { setMode(m); setVia('id'); setError(''); };
+  const switchMode = (m) => { nfc.stop(); resetCard(); setMode(m); setVia('id'); setError(''); };
+
+  // Picking "Tap ID card" starts the reader right away (that click is the gesture Web NFC needs)
+  const pickVia = (v) => {
+    setVia(v);
+    setError('');
+    if (v === 'card') { if (nfc.supported && !nfc.scanning && !cardToken) nfc.start(); }
+    else { nfc.stop(); resetCard(); }
+  };
 
   return (
     <div className="min-h-screen p-0 sm:p-6 lg:p-10">
@@ -76,7 +110,7 @@ export default function Login() {
           {mode === 'login' && (
             <div className="inline-flex w-fit rounded-full bg-rail p-1" role="tablist" aria-label="Sign in method">
               {[['id', 'Student ID'], ['card', 'Tap ID card']].map(([v, label]) => (
-                <button key={v} type="button" role="tab" aria-selected={via === v} onClick={() => { setVia(v); setError(''); }}
+                <button key={v} type="button" role="tab" aria-selected={via === v} onClick={() => pickVia(v)}
                   className={`h-9 rounded-full px-5 text-sm transition-colors ${via === v ? 'bg-white font-medium text-plum-900' : 'text-plum-700'}`}>
                   {label}
                 </button>
@@ -94,7 +128,11 @@ export default function Login() {
                   {nfc.supported ? (
                     <>
                       <p className="mt-4 font-display text-xl font-medium">Hold your school ID to the back of your phone</p>
-                      <p className="note mt-1">You will enter your password next, so a lost card cannot sign in on its own.</p>
+                      <p className="note mt-1">
+                        {trusted
+                          ? 'Just tap. No password needed on this phone.'
+                          : 'First time on this phone? You will enter your password once, then a tap is enough.'}
+                      </p>
                       <button type="button" onClick={nfc.start} className="btn btn-primary mt-4" disabled={nfc.scanning}>
                         {nfc.scanning ? 'Waiting for your card' : 'Start scanning'}
                       </button>
@@ -118,13 +156,13 @@ export default function Login() {
                 <div className="flex items-center gap-3 rounded-3xl bg-sage p-4">
                   <span className="grid h-10 w-10 place-items-center rounded-full bg-white text-ok"><Icon name="check" size={20} /></span>
                   <div className="flex-1">
-                    <p className="font-medium">ID card detected</p>
-                    <p className="note">Enter your password to finish.</p>
+                    <p className="font-medium">{ask ? 'ID card detected' : 'Signing you in'}</p>
+                    {ask && <p className="note">Enter your password to finish. Students only need the tap next time on this phone.</p>}
                   </div>
-                  <button type="button" onClick={() => setCardToken('')} className="btn-text">Scan another</button>
+                  {ask && <button type="button" onClick={() => { resetCard(); nfc.start(); }} className="btn-text">Scan another</button>}
                 </div>
               )}
-              {cardToken && <input className="field" type="password" autoComplete="current-password" placeholder="Password" value={form.password} onChange={set('password')} required autoFocus />}
+              {cardToken && ask && <input className="field" type="password" autoComplete="current-password" placeholder="Password" value={form.password} onChange={set('password')} required autoFocus />}
             </>
           ) : (
             <>
@@ -147,7 +185,7 @@ export default function Login() {
             </>
           )}
 
-          {(!cardMode || cardToken) && (
+          {(!cardMode || (cardToken && ask)) && (
             <button disabled={loading} className="btn btn-primary h-12 text-base">
               {loading ? 'Please wait' : mode === 'login' ? 'Sign in' : 'Create account'}
             </button>
