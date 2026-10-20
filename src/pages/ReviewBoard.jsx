@@ -50,6 +50,8 @@ export default function ReviewBoard() {
   };
 
   // Latest values for the live updater, which runs outside React's render cycle
+  const voteState = useRef(new Map()); // reviewer id -> votes still on their way to the server
+  const voteEpoch = useRef(0);         // changes whenever a vote starts or finishes (see syncLive)
   const filtersRef = useRef(filters);
   const itemsRef = useRef(items);
   const loadingRef = useRef(true);
@@ -85,12 +87,16 @@ export default function ReviewBoard() {
   // update in place; brand new reviewers wait behind the "Show" button.
   const syncLive = async () => {
     const mine = filtersRef.current;
+    const epoch = voteEpoch.current;
     try {
       const list = await api(`/resources?${toQuery(mine)}`);
       if (filtersRef.current !== mine) return;
+      if (voteEpoch.current !== epoch) return; // a vote started or finished meanwhile: this list may be older than it. Its own change will trigger a fresh refresh
       const { merged, incoming: news } = mergeResources(itemsRef.current, list, user.id);
       freshRef.current = list;
-      setItems(merged);
+      // a card whose vote is still on its way keeps what the voter sees
+      const onScreen = new Map(itemsRef.current.map((r) => [r._id, r]));
+      setItems(merged.map((r) => (voteState.current.has(r._id) ? onScreen.get(r._id) || r : r)));
       setIncoming(news);
     } catch { /* offline: the next change will try again */ }
   };
@@ -109,6 +115,41 @@ export default function ReviewBoard() {
       setError(err.message);
     }
   };
+
+  // Voting answers instantly: the card changes on screen the moment you tap, and the server catches up
+  // in the background. Quick taps on one card are sent in order. If the server refuses (offline, signed
+  // out), the card goes back to what the server says and the error is shown.
+  const vote = (id, value) => {
+    setError('');
+    voteEpoch.current += 1;
+    setItems((prev) => prev.map((r) => {
+      if (r._id !== id) return r;
+      const next = r.myVote === value ? 0 : value; // the same value again takes the vote back
+      return { ...r, myVote: next, score: r.score - r.myVote + next };
+    }));
+
+    const st = voteState.current.get(id) || { pending: 0, latest: null, failed: null, tail: Promise.resolve() };
+    voteState.current.set(id, st);
+    st.pending += 1;
+    st.tail = st.tail.then(async () => {
+      try {
+        st.latest = await api(`/resources/${id}/vote`, { method: 'POST', body: { value } });
+      } catch (err) {
+        st.failed = err;
+      }
+      st.pending -= 1;
+      if (st.pending > 0) return; // more taps are queued behind this one
+      voteState.current.delete(id);
+      voteEpoch.current += 1;
+      if (st.failed) {
+        setError(st.failed.message);
+        syncLive(); // put the card back to what the server says
+      } else if (st.latest) {
+        replace(st.latest); // the server's numbers win, they include other people's votes
+      }
+    });
+  };
+
   const remove = async (id) => {
     if (!confirm('Delete this reviewer for everyone? This cannot be undone.')) return;
     try {
@@ -188,7 +229,7 @@ export default function ReviewBoard() {
           )}
           <div className={`grid grid-cols-1 gap-4 transition-opacity md:grid-cols-2 ${loading && items.length > 0 ? 'opacity-60' : ''}`}>
             {items.map((r, i) => (
-              <ResourceCard key={r._id} index={i} resource={r} onVote={(id, value) => act(id, 'vote', { value })} canVerify={isAdmin} onVerify={(id) => act(id, 'verify')} canDelete={isAdmin} onDelete={remove} />
+              <ResourceCard key={r._id} index={i} resource={r} onVote={vote} canVerify={isAdmin} onVerify={(id) => act(id, 'verify')} canDelete={isAdmin} onDelete={remove} />
             ))}
           </div>
         </div>

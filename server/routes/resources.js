@@ -159,33 +159,52 @@ router.delete('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
 }));
 
 // POST /api/resources/:id/vote   body: { value: 1 | -1 }  (sending the same value again removes the vote)
+// Answers with the updated reviewer. Kept to a handful of database round trips because every tap waits for it.
 router.post('/:id/vote', asyncHandler(async (req, res) => {
   const value = Number(req.body?.value);
   if (![1, -1].includes(value)) return res.status(400).json({ message: 'value must be 1 or -1' });
-  if (!(await one('SELECT id FROM resources WHERE id = $1', [req.params.id])))
-    return res.status(404).json({ message: 'Resource not found' });
+  const id = req.params.id;
+  const userId = req.user.id;
 
-  await tx(async (q) => {
-    const [mine] = await q('SELECT value FROM resource_votes WHERE resource_id = $1 AND user_id = $2', [req.params.id, req.user.id]);
-    if (mine && Number(mine.value) === value) {
-      await q('DELETE FROM resource_votes WHERE resource_id = $1 AND user_id = $2', [req.params.id, req.user.id]);
-    } else {
-      await q(
-        `INSERT INTO resource_votes (resource_id, user_id, value) VALUES ($1, $2, $3)
-         ON CONFLICT (resource_id, user_id) DO UPDATE SET value = EXCLUDED.value`,
-        [req.params.id, req.user.id, value]
-      );
-    }
-    await q(
-      `UPDATE resources
-       SET score = (SELECT CAST(COALESCE(SUM(value), 0) AS INTEGER) FROM resource_votes WHERE resource_id = $1),
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1`,
-      [req.params.id]
+  const row = await tx(async (q) => {
+    // Lock this reviewer's row first: votes on one reviewer are applied one at a time, so the score
+    // can never be miscounted by two votes landing together. It also doubles as the "does it exist" check.
+    if (!(await q('SELECT 1 FROM resources WHERE id = $1 FOR UPDATE', [id])).length) return null;
+
+    const [mine] = await q('SELECT value FROM resource_votes WHERE resource_id = $1 AND user_id = $2', [id, userId]);
+    const before = mine ? Number(mine.value) : 0;
+    const after = before === value ? 0 : value; // the same value again takes the vote back
+
+    // One statement does everything else: change the vote, bump the live counter, recompute the score
+    // (the sum of the other votes plus this one's new value) and read the reviewer back with its names.
+    const write = after === 0
+      ? 'DELETE FROM resource_votes WHERE resource_id = $1 AND user_id = $2'
+      : `INSERT INTO resource_votes (resource_id, user_id, value) VALUES ($1, $2, ${after})
+         ON CONFLICT (resource_id, user_id) DO UPDATE SET value = EXCLUDED.value`;
+    const [updated] = await q(
+      `WITH w AS (${write}),
+            b AS (INSERT INTO live_state (topic, version) VALUES ('resources', 1)
+                  ON CONFLICT (topic) DO UPDATE SET version = live_state.version + 1),
+            upd AS (
+              UPDATE resources
+              SET score = (SELECT CAST(COALESCE(SUM(value), 0) AS INTEGER) FROM resource_votes
+                           WHERE resource_id = $1 AND user_id <> $2) + ${after},
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id = $1
+              RETURNING *
+            )
+       SELECT upd.*, u.name AS uploader_name, u.program AS uploader_program, v.name AS verifier_name,
+              ${after} AS my_vote
+       FROM upd
+       JOIN users u ON u.id = upd.uploader_id
+       LEFT JOIN users v ON v.id = upd.verified_by`,
+      [id, userId]
     );
-    await bump('resources', q);
+    return updated;
   });
-  res.json(await getShaped(req.params.id, req.user.id));
+
+  if (!row) return res.status(404).json({ message: 'Resource not found' });
+  res.json(shape(row));
 }));
 
 export default router;

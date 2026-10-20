@@ -154,6 +154,7 @@ Running locally: put the same two variables in `.env` to try it; leave them out 
 ### What you see
 
 - **Card status** (sidebar, or the top bar on phones, for students and event staff): shows whether your ID card is linked, and changes by itself when an admin links it for you.
+- **Voting** is instant: the card changes the moment you tap, and the vote is sent in the background (quick taps on one card are sent in order). If the server refuses it, the card goes back to what the server says and an error is shown.
 - **Review Board**: other people's votes and the verified badge update in place without reordering the cards under you. Reviewers posted by other people appear behind a **"N new reviewers were posted"** banner with a **Show** button. A "new" reviewer is one that is not on screen, was posted after everything that is, and is not yours; nothing is guessed from clocks.
 - **Overview and Door log**: numbers and rows update on their own; new rows flash briefly.
 - **Door scanner**: each tap is uploaded about a second after it happens (so the admin sees it live). Offline it stays queued and uploads when the connection returns, and a failed upload is retried every 20 seconds.
@@ -194,7 +195,7 @@ All routes are under `/api` and, except register/login/health, need `Authorizati
 | `GET /admin/overview` | admin | everything on the Overview page |
 | `GET /live` | any signed-in user | change counters, deployed build id, server time and (when Realtime is on) a sealed live query |
 | `GET/POST /resources`, `GET /resources/:id/file` | any signed-in user | review board |
-| `POST /resources/:id/vote` | any signed-in user | `{ "value": 1 }` or `-1`; sending the same value again removes the vote |
+| `POST /resources/:id/vote` | any signed-in user | `{ "value": 1 }` or `-1`; sending the same value again removes the vote. Answers with the updated reviewer. Votes on one reviewer are applied one at a time (the row is locked), so the score is always the sum of the votes |
 | `POST /resources/:id/verify`, `DELETE /resources/:id` | admin | verify badge, remove a reviewer |
 
 ## Database
