@@ -160,8 +160,8 @@ function ScanSession({ session, roster, reload, onLeave }) {
         <ScanControls onToken={onToken} />
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {tiles.map((t) => (
-            <div key={t.label} className={`tile ${t.tint} flex items-center justify-between gap-2`}>
+          {tiles.map((t, i) => (
+            <div key={t.label} style={{ '--i': i }} className={`tile rise ${t.tint} flex items-center justify-between gap-2`}>
               <div className="min-w-0">
                 <p className="font-display text-[2.4rem] font-medium leading-none tabular-nums">{t.n}</p>
                 <p className="mt-1.5 text-sm">{t.label}</p>

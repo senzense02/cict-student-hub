@@ -65,12 +65,23 @@ server/
 src/
   pages/            Overview, ReviewBoard, DoorScanner, DoorLog, Cards, AdminUsers, Login
   components/       shared UI, CardStatus + CardLinkModal (card linked or not, link your own card), UpdateNotice (new-version banner),
-                    SessionList + SessionSetup + ImportModal (door sessions and the Google Form import), SessionLog + TapRow (Door log)
+                    SessionList + SessionSetup + ImportModal (door sessions and the Google Form import), SessionLog + TapRow (Door log),
+                    PageSkeleton + PageBoundary (loading placeholder and failure message while a tab's code downloads)
   lib/              offline queue, door logic, liveStore.js (shared poller), live.js (React hooks)
 public/sw.js        service worker
 vite.config.js      build; writes /version.json and names the service-worker cache per deploy
 vercel.json         Vercel settings
 ```
+
+## Speed notes
+
+- **Each tab is its own file** (`React.lazy` in `src/App.jsx`). The tab a person is most likely to open is requested while React starts up, and the other tabs their role can open are fetched when the browser is idle, so switching is instant and still works at the door with no connection. Students on "data saver" skip the idle fetch.
+- **React has its own file** (`vite.config.js`), so a deploy that only changes the app leaves it in the browser's cache.
+- **Fonts are preloaded** (the two Latin files, found in the finished build by `vite.config.js`) so text does not wait for the stylesheet to be read first.
+- **Caching** (`vercel.json`): files in `/assets` have hashed names and are cached for a year; `sw.js` and `version.json` are never cached, so deploys are noticed straight away.
+- **Service worker**: if the network is up but barely moving, the saved page is used after 4 seconds instead of waiting for it.
+- **Long lists** skip layout and painting while scrolled far off screen (`content-visibility`, classes `cv` and `cv-row` in `index.css`), and review cards only redraw when their own reviewer changes.
+- **Animations** only move `opacity` and `transform` (classes at the top of `index.css`), are short, and are all turned off for people who ask their device for reduced motion.
 
 ## Run it on your computer
 

@@ -96,7 +96,7 @@ export default function Login() {
   return (
     <div className="min-h-screen p-0 sm:p-6 lg:p-10">
       <div className="mx-auto grid min-h-screen max-w-5xl overflow-hidden bg-paper sm:min-h-[640px] sm:rounded-[32px] md:grid-cols-[1fr_0.9fr]">
-        <form onSubmit={submit} className="flex flex-col justify-center gap-5 p-7 sm:p-12">
+        <form onSubmit={submit} className="page-in flex flex-col justify-center gap-5 p-7 sm:p-12">
           <div className="flex items-center gap-3">
             <span className="grid h-9 w-9 place-items-center rounded-[12px] bg-plum-700 font-display text-lg font-semibold text-white">C</span>
             <span className="font-display text-xl font-semibold tracking-tight">Student Hub</span>
@@ -122,6 +122,8 @@ export default function Login() {
 
           {error && <p className="alert" role="alert">{error}</p>}
 
+          {/* keyed so the fields fade in when you switch between sign in, tap and register */}
+          <div key={`${mode}-${via}`} className="fade-in flex flex-col gap-5">
           {cardMode ? (
             <>
               {!cardToken ? (
@@ -186,6 +188,7 @@ export default function Login() {
               <input className="field" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="Password, at least 8 characters" value={form.password} onChange={set('password')} required />
             </>
           )}
+          </div>
 
           {(!cardMode || (cardToken && ask)) && (
             <button disabled={loading} className="btn btn-primary h-12 text-base">
@@ -201,7 +204,7 @@ export default function Login() {
           </p>
         </form>
 
-        <aside className="hidden flex-col justify-center gap-8 bg-plum-700 p-12 text-white md:flex">
+        <aside style={{ '--i': 2 }} className="rise hidden flex-col justify-center gap-8 bg-plum-700 p-12 text-white md:flex">
           <CardArt />
           <div>
             <p className="font-display text-[1.7rem] font-medium leading-tight tracking-tight">Your school ID is your key to class.</p>

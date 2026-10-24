@@ -28,9 +28,46 @@ function buildVersion() {
   };
 }
 
+// Puts the two Latin font files in the page's <head> as preloads. Without this the browser only learns about the
+// fonts after it has downloaded and read the stylesheet, so text appears late or jumps when the font swaps in.
+// The file names carry a hash that changes per build, so they are read from the finished bundle. If the font
+// package's naming ever changes this simply adds nothing.
+function preloadFonts() {
+  let base = '/';
+  return {
+    name: 'preload-fonts',
+    apply: 'build',
+    configResolved(config) {
+      base = config.base;
+    },
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        return Object.keys(ctx.bundle || {})
+          .filter((file) => /-latin-wght-normal[^/]*\.woff2$/.test(file))
+          .map((file) => ({
+            tag: 'link',
+            attrs: { rel: 'preload', as: 'font', type: 'font/woff2', href: `${base}${file}`, crossorigin: true },
+            injectTo: 'head-prepend',
+          }));
+      },
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), buildVersion()],
+  plugins: [react(), tailwindcss(), buildVersion(), preloadFonts()],
   define: { __BUILD_ID__: JSON.stringify(buildId) }, // lets the page know its own build id to compare with version.json
+  build: {
+    reportCompressedSize: false, // skips gzipping every file just to print its size: a faster build
+    rollupOptions: {
+      output: {
+        // React rarely changes, so keeping it in its own file means a deploy that only touches the app's own code
+        // leaves it in the browser's cache: returning visitors re-download only the small app files.
+        manualChunks: { react: ['react', 'react-dom'] },
+      },
+    },
+  },
   // Local development: forward /api to the Express server started by `npm run dev:api`
   server: { proxy: { '/api': 'http://localhost:5000' } },
 });

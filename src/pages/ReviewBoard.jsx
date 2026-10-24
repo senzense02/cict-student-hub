@@ -1,6 +1,6 @@
 // Review board: browse and filter shared reviewers, upload, vote, and (admin) verify or delete.
 // Updates arrive live from the server; see mergeResources in lib/logic.js for how they are folded in.
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLive } from '../lib/live.js';
@@ -162,6 +162,14 @@ export default function ReviewBoard() {
     }
   };
 
+  // The card handlers must keep the same identity between renders, or every card would redraw on every
+  // keystroke in the filters. They call through a ref to always run the newest version of each function.
+  const latestHandlers = useRef({});
+  latestHandlers.current = { vote, remove, verify: (id) => act(id, 'verify') };
+  const onVote = useCallback((id, value) => latestHandlers.current.vote(id, value), []);
+  const onVerify = useCallback((id) => latestHandlers.current.verify(id), []);
+  const onDelete = useCallback((id) => latestHandlers.current.remove(id), []);
+
   // How many filters differ from the defaults, shown on the toggle so a hidden filter is never a surprise
   const activeFilters = [
     filters.program !== 'ALL', filters.yearLevel !== 'ALL', filters.courseCode.trim(), filters.q.trim(),
@@ -231,7 +239,7 @@ export default function ReviewBoard() {
           )}
           <div className={`grid grid-cols-1 gap-4 transition-opacity md:grid-cols-2 ${loading && items.length > 0 ? 'opacity-60' : ''}`}>
             {items.map((r, i) => (
-              <ResourceCard key={r._id} index={i} resource={r} onVote={vote} canVerify={isAdmin} onVerify={(id) => act(id, 'verify')} canDelete={isAdmin} onDelete={remove} />
+              <ResourceCard key={r._id} index={i} resource={r} onVote={onVote} canVerify={isAdmin} onVerify={onVerify} canDelete={isAdmin} onDelete={onDelete} />
             ))}
           </div>
         </div>
@@ -247,10 +255,6 @@ export default function ReviewBoard() {
               <Ring value={verifiedCount} total={items.length} color="var(--color-ok)" />
             </div>
             <p className="mt-3 text-sm text-ink/70">{verifiedCount} of {items.length} verified by an admin.</p>
-          </div>
-          <div className="tile bg-blush">
-            <p className="font-display text-xl font-medium leading-snug">Notes that helped you can help the next batch.</p>
-            <button onClick={() => setShowUpload(true)} className="btn btn-primary btn-sm mt-4">Share a reviewer</button>
           </div>
         </aside>
       </div>

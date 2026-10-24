@@ -1,15 +1,16 @@
 // One reviewer on the board: votes, verified badge, and an inline preview or download of the file.
 // Files sit behind the login, so they are fetched with the token and shown through a temporary blob: URL.
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { fetchFileUrl } from '../api.js';
 import { tintFor } from './Avatar.jsx';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 
-export default function ResourceCard({ resource, index = 0, onVote, canVerify, onVerify, canDelete, onDelete }) {
+function ResourceCard({ resource, index = 0, onVote, canVerify, onVerify, canDelete, onDelete }) {
   const [previewUrl, setPreviewUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [popped, setPopped] = useState(0); // which vote button was just tapped, so only that tap animates
   const isPdf = resource.fileType === '.pdf';
   const filePath = `/resources/${resource._id}/file`;
   const uploader = resource.uploader?.name || 'Unknown';
@@ -44,14 +45,14 @@ export default function ResourceCard({ resource, index = 0, onVote, canVerify, o
   };
 
   const vote = (value, icon, label) => (
-    <button onClick={() => onVote(resource._id, value)} aria-label={label} aria-pressed={resource.myVote === value}
-      className={`grid h-8 w-8 place-items-center rounded-full transition active:scale-90 ${resource.myVote === value ? 'bg-plum-700 text-white' : 'text-plum-700 hover:bg-plum-100'}`}>
+    <button onClick={() => { setPopped(value); onVote(resource._id, value); }} aria-label={label} aria-pressed={resource.myVote === value}
+      className={`grid h-8 w-8 place-items-center rounded-full transition active:scale-90 ${resource.myVote === value ? `bg-plum-700 text-white ${popped === value ? 'tick' : ''}` : 'text-plum-700 hover:bg-plum-100'}`}>
       <Icon name={icon} size={18} />
     </button>
   );
 
   return (
-    <article style={{ '--i': Math.min(index, 8) }} className={`${tintFor(resource.courseCode)} rise flex min-w-0 flex-col gap-4 rounded-3xl p-5`}>
+    <article style={{ '--i': Math.min(index, 8) }} className={`${tintFor(resource.courseCode)} rise lift cv flex min-w-0 flex-col gap-4 rounded-3xl p-5`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-wrap gap-1.5 text-[13px]">
           <span className="rounded-full bg-white px-3 py-1 font-medium text-plum-900">{resource.courseCode}</span>
@@ -89,7 +90,11 @@ export default function ResourceCard({ resource, index = 0, onVote, canVerify, o
         {canDelete && <button onClick={() => onDelete(resource._id)} className="btn-text text-bad-ink">Delete</button>}
       </div>
       {err && <p className="text-xs text-bad-ink">{err}</p>}
-      {previewUrl && <iframe title={resource.title} src={previewUrl} className="h-[480px] w-full rounded-2xl border border-line bg-white" />}
+      {previewUrl && <iframe title={resource.title} src={previewUrl} loading="lazy" className="h-[480px] w-full rounded-2xl border border-line bg-white" />}
     </article>
   );
 }
+
+// Cards only redraw when their own reviewer changes, so typing in the filters or voting on one card
+// does not redraw the other ninety-nine.
+export default memo(ResourceCard);

@@ -20,16 +20,24 @@ self.addEventListener('fetch', (e) => {
 
   // Pages: network first, so a new deploy shows up, and the saved page when offline.
   // The app is a single page, so every address is the same index.html.
+  // On a connection that is "up" but barely moving (weak Wi-Fi at the door), waiting for the network could take
+  // a minute, so after 4 seconds the saved page is used instead. The request keeps going and refreshes the
+  // saved copy for next time.
   if (req.mode === 'navigate') {
+    const network = fetch(req).then((res) => {
+      if (res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put('/index.html', copy));
+      }
+      return res;
+    });
+    const tooSlow = new Promise((resolve) => setTimeout(resolve, 4000, null));
     e.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('/index.html', copy));
-          return res;
-        })
-        .catch(() => caches.match('/index.html'))
+      Promise.race([network, tooSlow])
+        .then(async (res) => res || (await caches.match('/index.html')) || network)
+        .catch(async () => (await caches.match('/index.html')) || Response.error())
     );
+    e.waitUntil(network.catch(() => {})); // let the refresh of the saved copy finish even after the fast answer
     return;
   }
 

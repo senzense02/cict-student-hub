@@ -67,30 +67,50 @@
 }
 
 /* Light motion, kept deliberately small: only opacity and transform are animated (cheap even on
-   old phones), every effect is short, and all of it is switched off for people who ask for reduced motion. */
+   old phones), every effect is short, and all of it is switched off for people who ask for reduced motion.
+   Entrance animations use fill-mode `backwards` (not `both`): the element returns to its normal styles when
+   the animation ends, so hover and press transforms still work afterwards. */
 @keyframes pop { from { transform: scale(0.97); opacity: 0.5; } to { transform: none; opacity: 1; } }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slide-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 @keyframes tick { 0% { transform: scale(1); } 40% { transform: scale(1.16); } 100% { transform: scale(1); } }
 @keyframes flash { from { background-color: var(--color-plum-200); } to { background-color: transparent; } }
-@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes sheen { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes pill { from { transform: scaleX(0.55); opacity: 0.3; } to { transform: none; opacity: 1; } }
+@keyframes ring-draw { from { stroke-dashoffset: var(--c); } }
 
-.pop { animation: pop 0.18s ease-out; }                                  /* a scan result */
-.page-in { animation: rise 0.26s ease-out both; }                         /* switching tabs */
-.rise { animation: rise 0.32s ease-out both; animation-delay: calc(var(--i, 0) * 45ms); } /* cards, one after another */
-.fade-in { animation: fade 0.2s ease-out both; }
-.slide-in { animation: slide-in 0.24s ease-out both; }                    /* banners */
-.tick { animation: tick 0.28s ease-out; transform-origin: center; }       /* a number that just changed */
-.flash { animation: flash 1.6s ease-out; }                                /* a row that just arrived */
-.skeleton { background: linear-gradient(90deg, var(--color-rail) 25%, #f7eff3 50%, var(--color-rail) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
-.ring-arc { transition: stroke-dashoffset 0.7s ease; }
+.pop { animation: pop 0.18s ease-out; }                                       /* a scan result */
+.page-in { animation: rise 0.26s ease-out backwards; }                        /* switching tabs */
+.rise { animation: rise 0.32s ease-out backwards; animation-delay: calc(var(--i, 0) * 45ms); } /* cards, one after another */
+.fade-in { animation: fade 0.2s ease-out backwards; }
+.slide-in { animation: slide-in 0.24s ease-out backwards; }                   /* banners */
+.tick { animation: tick 0.28s ease-out; transform-origin: center; }           /* a number that just changed */
+.flash { animation: flash 1.6s ease-out; }                                    /* a row that just arrived */
+.nav-pill { animation: pill 0.22s ease-out; transform-origin: center; }       /* the tab you just switched to (phone bar) */
+.ring-arc { transition: stroke-dashoffset 0.7s ease; animation: ring-draw 0.8s ease-out; } /* a ring filling up when it first appears */
+
+/* Loading placeholder. A highlight slides across (transform only) instead of animating the background,
+   which would repaint the whole box on every frame. */
+.skeleton { position: relative; overflow: hidden; background: var(--color-rail); }
+.skeleton::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent); animation: sheen 1.4s ease-in-out infinite; }
+
+/* Cards lift a little under a mouse. Touch screens have no hover, so they skip it. */
+.lift { transition: transform 0.2s ease; }
+@media (hover: hover) { .lift:hover { transform: translateY(-2px); } }
+
+/* Skip layout and painting for list items that are scrolled far off screen. The browser remembers each
+   item's real height once it has been seen (`auto`), so scrolling stays smooth. Browsers without support ignore it. */
+.cv { content-visibility: auto; contain-intrinsic-size: auto 210px; }
+.cv-row { content-visibility: auto; contain-intrinsic-size: auto 56px; }
 
 .btn, .chip, .btn-text { transition-property: color, background-color, border-color, opacity, transform; transition-duration: 0.15s; }
 .btn:active:not(:disabled), .chip:active, .btn-text:active:not(:disabled) { transform: scale(0.97); }
 
 @media (prefers-reduced-motion: reduce) {
-  .pop, .page-in, .rise, .fade-in, .slide-in, .tick, .flash, .skeleton { animation: none; }
-  .ring-arc { transition: none; }
+  .pop, .page-in, .rise, .fade-in, .slide-in, .tick, .flash, .nav-pill { animation: none; }
+  .skeleton::after { animation: none; display: none; }
+  .ring-arc { transition: none; animation: none; }
+  .lift, .lift:hover { transition: none; transform: none; }
   .btn:active:not(:disabled), .chip:active, .btn-text:active:not(:disabled) { transform: none; }
 }

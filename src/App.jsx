@@ -1,5 +1,5 @@
 // App shell: sign-in gate, the tabs each role can see, sidebar (desktop) and bottom bar (phone).
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { useAuth } from './context/AuthContext.jsx';
 import { pendingCount, syncAll } from './lib/offline.js';
 import { setAuthLostHandler } from './lib/liveStore.js';
@@ -9,13 +9,9 @@ import Icon from './components/Icon.jsx';
 import Avatar from './components/Avatar.jsx';
 import CardStatus from './components/CardStatus.jsx';
 import CardLinkModal from './components/CardLinkModal.jsx';
-import Login from './pages/Login.jsx';
-import ReviewBoard from './pages/ReviewBoard.jsx';
-import Overview from './pages/Overview.jsx';
-import DoorLog from './pages/DoorLog.jsx';
-import DoorScanner from './pages/DoorScanner.jsx';
-import Cards from './pages/Cards.jsx';
-import AdminUsers from './pages/AdminUsers.jsx';
+import PageBoundary from './components/PageBoundary.jsx';
+import PageSkeleton from './components/PageSkeleton.jsx';
+import Login from './pages/Login.jsx'; // stays in the main file: it is the first thing a new visitor sees
 
 // Which tabs each role can see
 //  student: the review board
@@ -25,16 +21,28 @@ import AdminUsers from './pages/AdminUsers.jsx';
 // that would be refused.
 // `short` is the label under the icon in the phone's bottom bar (default: the first word), needed because
 // "Door scanner" and "Door log" would both read "Door".
+// Each tab's code is its own file, downloaded the first time it is needed. `load` starts that download.
 const TABS = [
-  { id: 'overview', label: 'Overview', icon: 'overview', roles: ['admin'], view: Overview },
-  { id: 'board', label: 'Review board', icon: 'board', roles: ['student', 'staff', 'admin'], view: ReviewBoard },
-  { id: 'door', label: 'Door scanner', short: 'Scanner', icon: 'door', roles: ['staff'], view: DoorScanner },
-  { id: 'log', label: 'Door log', short: 'Door log', icon: 'log', roles: ['staff', 'admin'], view: DoorLog },
-  { id: 'cards', label: 'ID cards', icon: 'card', roles: ['admin'], view: Cards },
-  { id: 'users', label: 'Users', icon: 'users', roles: ['admin'], view: AdminUsers },
-];
+  { id: 'overview', label: 'Overview', icon: 'overview', roles: ['admin'], load: () => import('./pages/Overview.jsx') },
+  { id: 'board', label: 'Review board', icon: 'board', roles: ['student', 'staff', 'admin'], load: () => import('./pages/ReviewBoard.jsx') },
+  { id: 'door', label: 'Door scanner', short: 'Scanner', icon: 'door', roles: ['staff'], load: () => import('./pages/DoorScanner.jsx') },
+  { id: 'log', label: 'Door log', short: 'Door log', icon: 'log', roles: ['staff', 'admin'], load: () => import('./pages/DoorLog.jsx') },
+  { id: 'cards', label: 'ID cards', icon: 'card', roles: ['admin'], load: () => import('./pages/Cards.jsx') },
+  { id: 'users', label: 'Users', icon: 'users', roles: ['admin'], load: () => import('./pages/AdminUsers.jsx') },
+].map((t) => ({ ...t, view: lazy(t.load) }));
 const HOME = { admin: 'overview', staff: 'door' }; // where each role lands the first time
 const ROLE_LABEL = { student: 'Student', staff: 'Event staff', admin: 'Admin' };
+
+// Start downloading the tab this person will most likely land on while React is still starting up, instead of
+// after it. Someone who is not signed in (or has storage turned off) just skips this.
+try {
+  const saved = JSON.parse(localStorage.getItem('cict_user'));
+  if (saved) {
+    const r = ROLE_LABEL[saved.role] ? saved.role : 'student';
+    const mine = TABS.filter((t) => t.roles.includes(r));
+    (mine.find((t) => t.id === localStorage.getItem('cict_tab')) || mine.find((t) => t.id === HOME[r]) || mine[0])?.load().catch(() => {});
+  }
+} catch { /* nothing to warm up */ }
 
 function Brand() {
   return (
@@ -61,6 +69,17 @@ export default function App() {
     try { sessionStorage.removeItem('cict_offer_card'); } catch { /* ignore */ }
     setOfferCard(false);
   };
+
+  // Once the page is idle, fetch the other tabs this role can open. They then open instantly, and the service
+  // worker keeps a copy, so staff can switch tabs at the door without a connection.
+  useEffect(() => {
+    if (!user) return undefined;
+    if (role === 'student' && navigator.connection?.saveData) return undefined; // respect "data saver" for students
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1500));
+    const cancel = window.cancelIdleCallback || clearTimeout;
+    const handle = idle(() => tabs.forEach((t) => t.load().catch(() => {})));
+    return () => cancel(handle);
+  }, [role]);
 
   // Upload anything queued while offline: when the connection comes back, and every 20 seconds
   // while something is still waiting (covers a failed attempt)
@@ -108,7 +127,7 @@ export default function App() {
               const on = current.id === t.id;
               return (
                 <button key={t.id} onClick={() => choose(t.id)} aria-current={on ? 'page' : undefined}
-                  className={`flex h-11 items-center gap-3 rounded-full px-4 text-[15px] transition-colors ${on ? 'bg-paper font-medium text-plum-900 shadow-[0_6px_16px_-10px_rgba(60,42,77,0.6)]' : 'text-plum-700 hover:bg-paper/60'}`}>
+                  className={`flex h-11 items-center gap-3 rounded-full px-4 text-[15px] transition-[background-color,color,box-shadow] duration-200 ${on ? 'bg-paper font-medium text-plum-900 shadow-[0_6px_16px_-10px_rgba(60,42,77,0.6)]' : 'text-plum-700 hover:bg-paper/60'}`}>
                   <Icon name={t.icon} size={20} />{t.label}
                 </button>
               );
@@ -136,7 +155,11 @@ export default function App() {
             </div>
           </div>
           <main className="flex-1 p-5 pb-28 md:p-9 md:pb-9">
-            <div key={current.id} className="page-in"><View onNavigate={choose} /></div>
+            <div key={current.id} className="page-in">
+              <PageBoundary key={current.id}>
+                <Suspense fallback={<PageSkeleton />}><View onNavigate={choose} /></Suspense>
+              </PageBoundary>
+            </div>
           </main>
         </div>
       </div>
@@ -149,7 +172,7 @@ export default function App() {
             const on = current.id === t.id;
             return (
               <button key={t.id} onClick={() => choose(t.id)} aria-current={on ? 'page' : undefined} className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-2xl py-1.5 text-[11px] ${on ? 'font-medium text-plum-900' : 'text-plum-700'}`}>
-                <span className={`grid h-7 w-12 place-items-center rounded-full ${on ? 'bg-plum-200' : ''}`}><Icon name={t.icon} size={20} /></span>
+                <span className={`grid h-7 w-12 place-items-center rounded-full ${on ? 'nav-pill bg-plum-200' : ''}`}><Icon name={t.icon} size={20} /></span>
                 <span className="truncate">{t.short || t.label.split(' ')[0]}</span>
               </button>
             );

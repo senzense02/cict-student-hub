@@ -8,7 +8,7 @@ const DOT = { CHECK_IN: 'bg-ok', RE_ENTRY: 'bg-ok', TEMPORARY_EXIT: 'bg-warn', U
 export default function TapRow({ e, fresh = false, showSession = false }) {
   const sessionName = showSession ? (e.session ? e.session.name || 'Deleted session' : 'No session') : null;
   return (
-    <div className={`row flex-wrap ${fresh ? 'flash' : ''}`}>
+    <div className={`row cv-row flex-wrap ${fresh ? 'flash' : ''}`}>
       <span className="flex min-w-0 items-center gap-3">
         <Avatar name={e.student?.name || '?'} size={32} />
         <span className="min-w-0 text-sm">

@@ -127,8 +127,8 @@ export default function SessionLog({ id, onBack }) {
       {error && <p className="alert mb-4" role="alert">{error}</p>}
 
       <div className={`grid grid-cols-2 gap-3 ${tiles.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
-        {tiles.map((t) => (
-          <div key={t.label} className={`tile ${t.tint}`}>
+        {tiles.map((t, i) => (
+          <div key={t.label} style={{ '--i': i }} className={`tile rise ${t.tint}`}>
             <p className="font-display text-[2.4rem] font-medium leading-none tabular-nums">{t.n}</p>
             <p className="mt-1.5 text-sm">{t.label}</p>
             {t.sub && <p className="text-xs text-ink/70">{t.sub}</p>}
