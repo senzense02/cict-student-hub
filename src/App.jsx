@@ -19,15 +19,17 @@ import AdminUsers from './pages/AdminUsers.jsx';
 
 // Which tabs each role can see
 //  student: the review board
-//  staff:   door scanner (+ review board)
+//  staff:   door scanner, door log (+ review board)
 //  admin:   overview, review board (verify/delete), door log, ID cards, users
 // The server enforces the same rules (requireRole); hiding a tab here is only about not showing buttons
 // that would be refused.
+// `short` is the label under the icon in the phone's bottom bar (default: the first word), needed because
+// "Door scanner" and "Door log" would both read "Door".
 const TABS = [
   { id: 'overview', label: 'Overview', icon: 'overview', roles: ['admin'], view: Overview },
   { id: 'board', label: 'Review board', icon: 'board', roles: ['student', 'staff', 'admin'], view: ReviewBoard },
-  { id: 'door', label: 'Door scanner', icon: 'door', roles: ['staff'], view: DoorScanner },
-  { id: 'log', label: 'Door log', icon: 'log', roles: ['admin'], view: DoorLog },
+  { id: 'door', label: 'Door scanner', short: 'Scanner', icon: 'door', roles: ['staff'], view: DoorScanner },
+  { id: 'log', label: 'Door log', short: 'Door log', icon: 'log', roles: ['staff', 'admin'], view: DoorLog },
   { id: 'cards', label: 'ID cards', icon: 'card', roles: ['admin'], view: Cards },
   { id: 'users', label: 'Users', icon: 'users', roles: ['admin'], view: AdminUsers },
 ];
@@ -148,7 +150,7 @@ export default function App() {
             return (
               <button key={t.id} onClick={() => choose(t.id)} aria-current={on ? 'page' : undefined} className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-2xl py-1.5 text-[11px] ${on ? 'font-medium text-plum-900' : 'text-plum-700'}`}>
                 <span className={`grid h-7 w-12 place-items-center rounded-full ${on ? 'bg-plum-200' : ''}`}><Icon name={t.icon} size={20} /></span>
-                <span className="truncate">{t.label.split(' ')[0]}</span>
+                <span className="truncate">{t.short || t.label.split(' ')[0]}</span>
               </button>
             );
           })}

@@ -1,21 +1,72 @@
+// The Door log, for admins and event staff. Two views of the same taps:
+//   By session  every event that was run, open one to see who came and who did not
+//   By day      every tap of one calendar day, whichever session it belongs to (this is how the log worked
+//               before sessions, and it is where taps from before sessions still show up)
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import PageHeader from '../components/PageHeader.jsx';
-import Avatar from '../components/Avatar.jsx';
+import TapRow, { ACTION_LABEL } from '../components/TapRow.jsx';
+import SessionLog from '../components/SessionLog.jsx';
 import { toCsv } from '../lib/logic.js';
+import { downloadText } from '../lib/download.js';
 import { useFresh, useLive } from '../lib/live.js';
 
-const LABEL = { CHECK_IN: 'Checked in', RE_ENTRY: 'Came back in', TEMPORARY_EXIT: 'Temporary exit', UNKNOWN_CARD: 'Unregistered card' };
-const DOT = { CHECK_IN: 'bg-ok', RE_ENTRY: 'bg-ok', TEMPORARY_EXIT: 'bg-warn', UNKNOWN_CARD: 'bg-bad' };
 const FILTERS = [['ALL', 'All'], ['CHECK_IN', 'Check ins'], ['TEMPORARY_EXIT', 'Exits'], ['RE_ENTRY', 'Re-entries'], ['UNKNOWN_CARD', 'Unregistered']];
 
 const todayLocal = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+const when = (iso) => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
-// Every door tap of one day, for the admin. Can be exported as a CSV.
-export default function DoorLog() {
+// Every session that has started, newest first
+function SessionsView({ onOpen }) {
+  const [sessions, setSessions] = useState(null);
+  const [error, setError] = useState('');
+
+  const load = () =>
+    api('/attendance/sessions')
+      .then((list) => { setSessions(list.filter((s) => s.status !== 'draft')); setError(''); }) // a draft has no taps yet
+      .catch((e) => setError(e.message));
+  useEffect(() => { load(); }, []);
+  useLive(['sessions', 'door'], load);
+  const fresh = useFresh((sessions || []).map((s) => s.id));
+
+  return (
+    <>
+      {error && <p className="alert mb-4" role="alert">{error}</p>}
+      {!sessions && !error && <p className="note">Loading</p>}
+      {sessions && (
+        <div className="overflow-hidden rounded-3xl border border-line bg-white">
+          {sessions.length === 0 && <p className="note p-4">No sessions yet. Event staff start one from the Door scanner.</p>}
+          {sessions.map((s) => {
+            const c = s.counts;
+            return (
+              <button key={s.id} onClick={() => onOpen(s.id)} className={`row w-full flex-wrap text-left transition-colors hover:bg-plum-100/60 ${fresh.has(s.id) ? 'flash' : ''}`}>
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{s.name}</span>
+                  <span className="text-sm text-muted">
+                    {s.status === 'active' ? `Started ${when(s.startedAt)}` : `${when(s.startedAt)} to ${when(s.endedAt)}`}
+                    {s.createdByName ? `, by ${s.createdByName}` : ''}
+                  </span>
+                </span>
+                <span className="flex items-center gap-3 text-sm">
+                  {s.status === 'active' && <span className="inline-flex h-7 items-center rounded-full bg-sage px-3 text-[13px] font-medium text-ok">Running</span>}
+                  <span className="tabular-nums">
+                    {c.roster ? `${c.attended} of ${c.roster} came` : `${c.students} ${c.students === 1 ? 'student' : 'students'}`}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+// Every door tap of one day, as before. Can be exported as a CSV.
+function DayView() {
   const [date, setDate] = useState(todayLocal());
   const [action, setAction] = useState('ALL');
   const [events, setEvents] = useState([]);
@@ -31,7 +82,7 @@ export default function DoorLog() {
       .finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, [date]);
-  useLive(['door', 'users'], () => { if (date === todayLocal()) load(true); }); // only "today" can change
+  useLive(['door', 'users', 'sessions'], () => { if (date === todayLocal()) load(true); }); // only "today" can change
   const freshTaps = useFresh(events.map((e) => e.clientId));
 
   const shown = useMemo(() => (action === 'ALL' ? events : events.filter((e) => e.action === action)), [events, action]);
@@ -44,23 +95,15 @@ export default function DoorLog() {
       name: e.student?.name || 'Unregistered card',
       program: e.student?.program || '',
       year: e.student?.yearLevel || '',
-      action: LABEL[e.action],
+      action: ACTION_LABEL[e.action],
+      session: e.session ? e.session.name || 'Deleted session' : '',
       by: e.by || '',
     }));
-    const csv = toCsv(rows, [['time', 'Time'], ['studentId', 'Student ID'], ['name', 'Name'], ['program', 'Program'], ['year', 'Year'], ['action', 'Action'], ['by', 'Scanned by']]);
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = `door-log-${date}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadText(`door-log-${date}.csv`, toCsv(rows, [['time', 'Time'], ['studentId', 'Student ID'], ['name', 'Name'], ['program', 'Program'], ['year', 'Year'], ['action', 'Action'], ['session', 'Session'], ['by', 'Scanned by']]));
   };
 
   return (
     <>
-      <PageHeader title="Door log" sub="Every card tap recorded at the door. Pick a day to review it or export it.">
-        <button onClick={download} disabled={shown.length === 0} className="btn btn-primary">Download CSV</button>
-      </PageHeader>
-
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <input type="date" className="field max-w-[190px]" aria-label="Day" value={date} max={todayLocal()} onChange={(e) => e.target.value && setDate(e.target.value)} />
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Type of tap">
@@ -69,6 +112,7 @@ export default function DoorLog() {
           ))}
         </div>
         <button onClick={() => load()} className="btn-text">Refresh</button>
+        <button onClick={download} disabled={shown.length === 0} className="btn btn-primary btn-sm ml-auto">Download CSV</button>
       </div>
 
       <p className="note mb-3">{events.length} taps from {peopleCount} {peopleCount === 1 ? 'student' : 'students'} on this day.</p>
@@ -77,23 +121,26 @@ export default function DoorLog() {
       <div className="overflow-hidden rounded-3xl border border-line bg-white">
         {loading && <p className="note p-4">Loading</p>}
         {!loading && shown.length === 0 && <p className="note p-4">No taps match.</p>}
-        {!loading && shown.map((e) => (
-          <div key={e.clientId} className={`row flex-wrap ${freshTaps.has(e.clientId) ? 'flash' : ''}`}>
-            <span className="flex min-w-0 items-center gap-3">
-              <Avatar name={e.student?.name || '?'} size={32} />
-              <span className="min-w-0 text-sm">
-                <span className="block truncate font-medium">{e.student ? e.student.name : 'Unregistered card'}</span>
-                <span className="text-muted">{e.student ? `${e.student.studentId}, ${e.student.program} year ${e.student.yearLevel}` : e.token}</span>
-              </span>
-            </span>
-            <span className="flex items-center gap-4 text-sm">
-              <span className="flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${DOT[e.action]}`} />{LABEL[e.action]}</span>
-              <span className="text-xs text-muted tabular-nums">{new Date(e.scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-              {e.by && <span className="hidden text-xs text-muted sm:inline">by {e.by}</span>}
-            </span>
-          </div>
-        ))}
+        {!loading && shown.map((e) => <TapRow key={e.clientId} e={e} fresh={freshTaps.has(e.clientId)} showSession />)}
       </div>
+    </>
+  );
+}
+
+export default function DoorLog() {
+  const [view, setView] = useState('sessions');
+  const [openId, setOpenId] = useState(null);
+
+  if (openId) return <SessionLog id={openId} onBack={() => setOpenId(null)} />;
+
+  return (
+    <>
+      <PageHeader title="Door log" sub="Every card tap recorded at the door. Open a session to see who came, or look at one day to see all of its taps." />
+      <div className="mb-4 flex gap-1.5" role="group" aria-label="View">
+        <button className="chip" aria-pressed={view === 'sessions'} onClick={() => setView('sessions')}>By session</button>
+        <button className="chip" aria-pressed={view === 'day'} onClick={() => setView('day')}>By day</button>
+      </div>
+      {view === 'sessions' ? <SessionsView onOpen={setOpenId} /> : <DayView />}
     </>
   );
 }

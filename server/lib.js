@@ -32,6 +32,11 @@ export const STUDENT_ID_REGEX = /^\d{2,4}-\d{3,6}$/;
 export const PROGRAMS = ['BSCS', 'BSIS'];
 export const isYearLevel = (n) => Number.isInteger(n) && n >= 1 && n <= 4;
 
+// A Student ID typed into a form: "25-1167", " 25 1167 ", or "25–1167" (phone keyboards turn a hyphen into an
+// en dash). Same rule as the client, so the list a staff member previews is the list the server stores.
+export const normalizeStudentNo = (v = '') =>
+  String(v).trim().replace(/[\u2010-\u2015\u2212]/g, '-').replace(/\s*-\s*/g, '-').replace(/\s+/g, '-');
+
 // The calendar day (in the school's time zone) as a [from, to) pair of UTC dates.
 // Default offset is UTC+8 (Philippines); change it with APP_UTC_OFFSET_HOURS.
 export function dayWindow(date) {

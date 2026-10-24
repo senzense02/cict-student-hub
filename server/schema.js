@@ -55,10 +55,38 @@ CREATE TABLE IF NOT EXISTS event_logs (
   action     TEXT NOT NULL CHECK (action IN ('CHECK_IN','TEMPORARY_EXIT','RE_ENTRY','UNKNOWN_CARD')),
   scanned_at TIMESTAMPTZ NOT NULL,
   by_id      TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  session_id TEXT                                -- the door session of the tap; NULL for taps from before sessions existed
 );
 CREATE INDEX IF NOT EXISTS idx_event_logs_student ON event_logs (student_id, scanned_at);
 CREATE INDEX IF NOT EXISTS idx_event_logs_time ON event_logs (scanned_at);
+
+-- A door session is one event with its own log: staff create it (draft), optionally import the Google Form
+-- registrants, start it (active), scan, and end it (ended). Ended sessions are what the Door log lists.
+CREATE TABLE IF NOT EXISTS door_sessions (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  status     TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','active','ended')),
+  created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  started_at TIMESTAMPTZ,
+  ended_at   TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_door_sessions_status ON door_sessions (status, created_at);
+
+-- The registration list of a session, imported from the Google Form. student_no is the Student ID as written
+-- in the form (normalised). It is matched to a Hub account when read (users.student_id), not when imported, so a
+-- student who creates their account after the import is picked up automatically.
+CREATE TABLE IF NOT EXISTS door_session_roster (
+  session_id TEXT NOT NULL REFERENCES door_sessions(id) ON DELETE CASCADE,
+  student_no TEXT NOT NULL,
+  form_name  TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (session_id, student_no)
+);
+
+-- event_logs.session_id has no foreign key, like the other columns of event_logs, so a late upload from a
+-- phone can never fail. (Databases created before sessions get the column from migrate() in db.js.)
+CREATE INDEX IF NOT EXISTS idx_event_logs_session ON event_logs (session_id, scanned_at);
 
 -- Change counters. Every write that other open pages should notice bumps one, and pages poll them
 -- (GET /api/live) to know when to refresh. Counters avoid comparing timestamps, which is error-prone.

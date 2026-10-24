@@ -79,15 +79,34 @@ async function ensureAdmin(client) {
   console.log(fromEnv ? '  Password : (the value of ADMIN_PASSWORD)\n' : `  Password : ${password}\n  SAVE THIS NOW - it is shown only once.\n`);
 }
 
+// Changes to tables that already exist (CREATE TABLE IF NOT EXISTS leaves existing tables alone). Each one first
+// checks whether it is needed, because ALTER TABLE takes an exclusive lock on the table even when it ends up
+// doing nothing, and that must not happen on every cold start. Runs before SCHEMA, which refers to the new column.
+async function migrate(client) {
+  const { rows } = await client.query(
+    `SELECT COUNT(*) AS columns, COUNT(*) FILTER (WHERE column_name = 'session_id') AS has_session
+     FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'event_logs'`
+  );
+  // columns = 0 means a brand-new database: SCHEMA creates the table with the column already in it
+  if (Number(rows[0].columns) > 0 && Number(rows[0].has_session) === 0) {
+    await client.query('ALTER TABLE event_logs ADD COLUMN session_id TEXT');
+  }
+}
+
 // Tables first, then the admin. Both steps are repeatable, and the lock makes concurrent cold starts take turns.
 async function setup() {
   const client = await getPool().connect();
   try {
     await client.query('SELECT pg_advisory_lock($1)', [LOCK_ID]);
     try {
+      // If another connection holds a lock this setup needs, fail with a clear error after 15 seconds
+      // instead of leaving every request waiting forever
+      await client.query("SET lock_timeout = '15s'");
+      await migrate(client);
       await client.query(SCHEMA);
       await ensureAdmin(client);
     } finally {
+      await client.query('RESET lock_timeout').catch(() => {});
       await client.query('SELECT pg_advisory_unlock($1)', [LOCK_ID]).catch(() => {});
     }
   } finally {

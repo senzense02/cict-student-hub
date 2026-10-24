@@ -3,7 +3,7 @@ import express from 'express';
 import { query } from '../db.js';
 import auth, { requireRole } from '../middleware/auth.js';
 import { asyncHandler, dayWindow, iso } from '../lib.js';
-import { doorEvents, shapeEvent, venueState } from '../door.js';
+import { activeVenueCounts, doorEvents, shapeEvent } from '../door.js';
 
 const router = express.Router();
 router.use(auth, requireRole('admin'));
@@ -25,12 +25,11 @@ router.get('/overview', asyncHandler(async (req, res) => {
     query(`SELECT CAST(COUNT(DISTINCT CASE WHEN action = 'CHECK_IN' THEN student_id END) AS INTEGER) AS checked_in,
                   CAST(COALESCE(SUM(CASE WHEN action = 'UNKNOWN_CARD' THEN 1 ELSE 0 END), 0) AS INTEGER) AS unknown
            FROM event_logs WHERE scanned_at >= $1`, [today]),
-    venueState(today),
+    activeVenueCounts(),
     doorEvents({ limit: 8 }),
   ]);
 
   const byRole = Object.fromEntries(roles.map((r) => [r.role, Number(r.n)]));
-  const states = Object.values(venue);
   const total = Number(resources[0].total);
   const verified = Number(resources[0].verified);
 
@@ -40,8 +39,8 @@ router.get('/overview', asyncHandler(async (req, res) => {
     resources: { total, verified, pending: total - verified },
     door: {
       checkedInToday: Number(doorToday[0].checked_in),
-      inside: states.filter((s) => s === 'INSIDE').length,
-      outside: states.filter((s) => s === 'OUTSIDE').length,
+      inside: venue.inside, // across the sessions that are running right now
+      outside: venue.outside,
       unknownToday: Number(doorToday[0].unknown),
     },
     pendingResources: pending.map((r) => ({
