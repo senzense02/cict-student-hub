@@ -14,10 +14,22 @@ const write = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 export const store = {
   students: () => read('students_db', []),
   setStudents: (v) => write('students_db', v),
-  venue: () => read('venue_state', {}), // { [studentId]: 'INSIDE' | 'OUTSIDE' }
-  setVenue: (v) => write('venue_state', v),
-  events: () => read('sync_queue', []), // door taps waiting to upload
+  // Who is inside is kept per session, so a new event starts with nobody inside
+  venue: (sessionId) => read(`venue_${sessionId}`, {}), // { [studentId]: 'INSIDE' | 'OUTSIDE' }
+  setVenue: (sessionId, v) => write(`venue_${sessionId}`, v),
+  events: () => read('sync_queue', []), // door taps waiting to upload; each carries the id of its session
   setEvents: (v) => write('sync_queue', v),
+  // The session this phone is scanning into, and a saved copy of it ({ session, roster }) so a reload with
+  // no internet can carry on scanning
+  session: () => read('door_session', null),
+  setSession: (id) => (id ? write('door_session', id) : localStorage.removeItem('door_session')),
+  sessionData: (sessionId) => read(`session_${sessionId}`, null),
+  setSessionData: (sessionId, v) => write(`session_${sessionId}`, v),
+  // A finished session no longer needs its saved copy on the phone
+  dropSession: (sessionId) => {
+    localStorage.removeItem(`venue_${sessionId}`);
+    localStorage.removeItem(`session_${sessionId}`);
+  },
 };
 
 // A unique id per tap. The server uses it to drop duplicates, which is what makes re-sending safe.
@@ -31,12 +43,14 @@ export async function refreshStudents() {
   return list;
 }
 
-// Only replace local door state when nothing is waiting to upload (otherwise we'd lose local taps)
-export async function refreshVenue() {
-  if (store.events().length) return null;
-  const v = await api('/attendance/venue-state');
-  store.setVenue(v);
-  return v;
+// Loads a session from the server: its details, its registration list and who is inside. The saved copy is
+// replaced, and the local inside/outside picture only when nothing from this session is waiting to upload
+// (otherwise we'd lose taps that the server has not seen yet).
+export async function refreshSession(sessionId) {
+  const data = await api(`/attendance/sessions/${sessionId}`);
+  store.setSessionData(sessionId, { session: data.session, roster: data.roster });
+  if (!store.events().some((e) => e.session === sessionId)) store.setVenue(sessionId, data.venue);
+  return data;
 }
 
 // Only staff and admins upload taps, so a student never has anything waiting

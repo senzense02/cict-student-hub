@@ -3,7 +3,7 @@
 A web app for the CICT department with two parts that share one login:
 
 - **Review Board**: students upload and share reviewers (PDF or code/text files) and vote them up or down. Admins mark reviewers as verified and can remove them.
-- **NFC door attendance**: event staff scan student ID cards at the door (check-in, temporary exit, re-entry). Scanning works **offline** and uploads when the phone is back online. Admins review everything in the Overview and the Door log.
+- **NFC door attendance**: event staff start a **session** for each event, optionally import its registration list from a Google Form, and scan student ID cards at the door (check-in, temporary exit, re-entry). Scanning works **offline** and uploads when the phone is back online. When the session ends it appears in the **Door log**, which staff and admins can both read.
 
 Everything is **live**: open pages update by themselves (new door taps, votes, reviewers, accounts, card changes) without refreshing, within a few seconds by default and instantly with Neon Realtime switched on (see "Live updates").
 
@@ -15,9 +15,9 @@ There are three roles: **student**, **event staff** and **admin**. Students regi
 |---|:-:|:-:|:-:|
 | Review board (browse, upload, vote) | yes | yes | yes, plus verify and delete |
 | Card status (linked or not, tap to link your own card) | yes | yes | |
-| Door scanner | | yes | |
+| Door scanner (create, set up, run and end sessions) | | yes | |
 | Overview (counts, things needing attention, recent door taps) | | | yes |
-| Door log (every tap of a day, CSV export) | | | yes |
+| Door log (every session with who came, every tap of a day, CSV export) | | yes | yes, plus delete a finished session |
 | ID cards (link or unlink a student's card) | | | yes |
 | Users (create staff/student accounts, reset passwords, delete) | | | yes |
 
@@ -55,16 +55,17 @@ server/
   db.js             connection pool, transactions, first-run setup (tables + first admin)
   schema.js         the SQL tables
   storage.js        Vercel Blob (or database fallback) for uploaded files
-  door.js           door-event queries shared by the attendance and admin routes
+  door.js           door-event queries (taps, who is inside a session) shared by the attendance and admin routes
   throttle.js       login attempt limiter (stored in Postgres)
   devices.js        trusted phones for tap-only card sign-in
   live.js           change counters that power live updates
   realtime.js       optional Neon Realtime: seals the live query for browsers
   middleware/auth.js
-  routes/           auth, users, students, attendance, resources, admin, live
+  routes/           auth, users, students, attendance (taps and sessions), resources, admin, live
 src/
   pages/            Overview, ReviewBoard, DoorScanner, DoorLog, Cards, AdminUsers, Login
-  components/       shared UI, CardStatus + CardLinkModal (card linked or not, link your own card), UpdateNotice (new-version banner)
+  components/       shared UI, CardStatus + CardLinkModal (card linked or not, link your own card), UpdateNotice (new-version banner),
+                    SessionList + SessionSetup + ImportModal (door sessions and the Google Form import), SessionLog + TapRow (Door log)
   lib/              offline queue, door logic, liveStore.js (shared poller), live.js (React hooks)
 public/sw.js        service worker
 vite.config.js      build; writes /version.json and names the service-worker cache per deploy
@@ -130,7 +131,7 @@ DELETE FROM users WHERE role = 'teacher';
 
 Two layers, and the second is optional:
 
-**1. Change counters (always on).** Every write that other people's screens should notice (a vote, an upload, a door tap, a new account, a card link) bumps a counter in the `live_state` table, in the same transaction as the write. Pages ask `GET /api/live` for the counters, and when a counter moves only the pages that care re-fetch their data: the Overview and Door log follow `door`, `resources` and `users`; the Review Board follows `resources`; ID cards, Users and the Door scanner follow `users`. Without Realtime, pages ask every **3 seconds** while the tab is visible (about 1,200 tiny requests per hour per open tab; raise `FAST_MS` in `src/lib/liveStore.js` to save quota).
+**1. Change counters (always on).** Every write that other people's screens should notice (a vote, an upload, a door tap, a new account, a card link) bumps a counter in the `live_state` table, in the same transaction as the write. Pages ask `GET /api/live` for the counters, and when a counter moves only the pages that care re-fetch their data: the Overview and Door log follow `door`, `sessions`, `resources` and `users`; the Review Board follows `resources`; ID cards and Users follow `users`; the Door scanner follows `users` and `sessions`. Without Realtime, pages ask every **3 seconds** while the tab is visible (about 1,200 tiny requests per hour per open tab; raise `FAST_MS` in `src/lib/liveStore.js` to save quota).
 
 **2. Neon Realtime (optional, instant).** When `NEON_REALTIME_URL` and `NEON_REALTIME_SECRET` are set, `GET /api/live` also returns a *sealed query*: an encrypted, signed capability for exactly one statement, `SELECT topic, version FROM live_state ORDER BY topic`. The page opens one WebSocket to Neon, subscribes with it, and receives the new counters the moment a write commits. Then:
 
@@ -158,7 +159,7 @@ Running locally: put the same two variables in `.env` to try it; leave them out 
 - **Voting** is instant: the card changes the moment you tap, and the vote is sent in the background (quick taps on one card are sent in order). If the server refuses it, the card goes back to what the server says and an error is shown.
 - **Review Board**: other people's votes and the verified badge update in place without reordering the cards under you. Reviewers posted by other people appear behind a **"N new reviewers were posted"** banner with a **Show** button. A "new" reviewer is one that is not on screen, was posted after everything that is, and is not yours; nothing is guessed from clocks.
 - **Overview and Door log**: numbers and rows update on their own; new rows flash briefly.
-- **Door scanner**: each tap is uploaded about a second after it happens (so the admin sees it live). Offline it stays queued and uploads when the connection returns, and a failed upload is retried every 20 seconds.
+- **Door scanner**: each tap is uploaded about a second after it happens (so the Door log of a running session updates live). Offline it stays queued and uploads when the connection returns, and a failed upload is retried every 20 seconds.
 - **New version**: the same call carries the deployed build id, so an open page shows "A new version is ready" with **Refresh** within seconds (up to about a minute with Realtime on). Nothing reloads by itself, so a scan in progress is never interrupted. `/version.json` is a backup check every minute.
 - **Signed out remotely**: if an admin deletes your account, the page signs you out within seconds.
 
@@ -171,11 +172,19 @@ Small and cheap: pages and cards fade up (cards one after another), numbers pop 
 ## User guide
 
 - **Student**: register with Student ID (like `25-1167`), name, program, year and a password. Browse the Review Board, filter by program, year or course code, upload reviewers (up to 4 MB), and vote. The **Card linked / Card not linked** pill (sidebar, or the top bar on phones) shows whether your ID card is linked. Right after you register, a popup offers to link your card (or tap the pill any time): hold the ID to the back of the phone (or type the card ID), enter your password, and save. From then on, on that phone you can log out, choose **Tap ID card**, tap, and you are in with no password. On any other phone the first tap asks for your password once. A linked card can only be changed by an admin.
-- **Event staff**: the same card status pill is shown for your own account. Staff can link a card too, but signing in with it always needs the password as well. *Door scanner* records taps at the entrance (check-in, temporary exit, re-entry) and shows who is inside. Taps upload automatically; if the connection drops, keep scanning and they upload when it returns (or use **Sync now**).
+- **Event staff**: the same card status pill is shown for your own account. Staff can link a card too, but signing in with it always needs the password as well.
+  - *Door scanner* works in **sessions**, one per event:
+    1. **New session**: give the event a name. It starts as a draft; nothing is logged yet.
+    2. **Import from Google Form** (optional): in Google Forms open the Responses tab, three-dot menu, **Download responses (.csv)** (or paste rows copied from the linked Sheet). The page finds the Student ID column (change it if it guessed wrong), shows how many students it will import and which rows it cannot read, then saves the list. Students are matched to Hub accounts by Student ID. You can import again to add more people, or replace the list, until the session ends.
+    3. **Start session**: the scanner opens. Each tap records check-in, temporary exit or re-entry, and shows who is inside. With a list, a student who is not on it is flagged in red (the tap is still recorded). Without a list, everyone with a linked card is let in.
+    4. **End session**: all taps on the phone are uploaded first, then the session moves to the Door log. Ending needs a connection.
+
+    Taps upload automatically; if the connection drops, keep scanning and they upload when it returns (or use **Sync now**). Anyone on staff can open a running session and scan into it from their own phone (useful for two doors); only the person who created it, or an admin, can import its list, start it, end it or delete a draft.
+  - *Door log*: **By session** lists every session, with who came out of how many on the list. Open one for the numbers, the **Attendance** list (came, did not come, no Hub account) and every tap, with CSV downloads for both. **By day** shows every tap of a calendar day, whichever session it belongs to.
 - **Admin**:
-  - *Overview*: totals, what needs attention (students without a card, unregistered cards tapped today, no staff accounts), reviewers waiting for verification (verify or delete right there), and the latest door taps.
+  - *Overview*: totals, what needs attention (students without a card, unregistered cards tapped today, no staff accounts), reviewers waiting for verification (verify or delete right there), and the latest door taps. "Inside now" counts students inside the sessions that are running; a finished session counts for nobody.
   - *Review board*: same as students, plus **Mark as verified** and **Delete** on every reviewer.
-  - *Door log*: pick a day, filter by type of tap, and **Download CSV**.
+  - *Door log*: the same as event staff see, plus **Delete this session** on a finished session (its taps are deleted with it).
   - *ID cards*: pick a student, tap their ID, save.
   - *Users*: create event staff and student accounts (not admins), reset passwords, delete accounts.
 
@@ -190,9 +199,16 @@ All routes are under `/api` and, except register/login/health, need `Authorizati
 | `POST /auth/card` | student, staff | link your own card: `{ "token", "password", "deviceKey" }`; refused if a card is already linked or the card belongs to someone else. For students it also trusts the phone for tap-only sign-in |
 | `GET /students` | staff, admin | roster for the scanner |
 | `PATCH /students/:id` | admin | link or remove an NFC card |
-| `POST /attendance/sync` | staff | idempotent upload of door taps |
-| `GET /attendance/venue-state` | staff, admin | who is inside or outside |
-| `GET /attendance/log?date=YYYY-MM-DD` | admin | every door tap of a day |
+| `POST /attendance/sync` | staff, admin | idempotent upload of door taps; each tap carries the `session` it was scanned in (a session that no longer exists is stored as no session) |
+| `GET /attendance/sessions` | staff, admin | every session with counts (list size, taps, who came, unregistered cards) |
+| `POST /attendance/sessions` | staff, admin | `{ name }`: create a session as a draft |
+| `GET /attendance/sessions/:id` | staff, admin | `{ session, roster, venue }`: everything a phone needs to scan into it |
+| `POST /attendance/sessions/:id/roster` | creator, admin | `{ rows: [{ studentId, name }], mode: "add" \| "replace" }`: save the imported list (IDs are checked again; at most 5000) |
+| `PATCH /attendance/sessions/:id` | creator, admin | `{ status: "active" \| "ended" }`: a session only moves draft, running, ended |
+| `DELETE /attendance/sessions/:id` | creator (draft), admin (finished) | a running session must be ended first; taps and list are deleted with it |
+| `GET /attendance/venue-state?session=ID` | staff, admin | who is inside or outside in one session (without `session`: taps that belong to none) |
+| `GET /attendance/log?date=YYYY-MM-DD` | staff, admin | every door tap of a day |
+| `GET /attendance/log?session=ID` | staff, admin | `{ session, roster, events }` for one session; each tap says whether the student was `offList` |
 | `GET /admin/overview` | admin | everything on the Overview page |
 | `GET /live` | any signed-in user | change counters, deployed build id, server time and (when Realtime is on) a sealed live query |
 | `GET/POST /resources`, `GET /resources/:id/file` | any signed-in user | review board |
@@ -201,7 +217,7 @@ All routes are under `/api` and, except register/login/health, need `Authorizati
 
 ## Database
 
-Tables are created automatically (see `server/schema.js`): `users`, `resources`, `resource_votes`, `files` (fallback storage only), `event_logs`, `card_devices`, `login_attempts`, `live_state`. Door taps carry a `client_id` generated on the phone, which is what makes re-sending safe.
+Tables are created automatically (see `server/schema.js`): `users`, `resources`, `resource_votes`, `files` (fallback storage only), `event_logs`, `door_sessions`, `door_session_roster`, `card_devices`, `login_attempts`, `live_state`. Door taps carry a `client_id` generated on the phone, which is what makes re-sending safe, and a `session_id` (empty for taps recorded before sessions existed). A session's imported list stores the Student ID as written in the form; it is matched to a Hub account when read, so students who sign up after the import are picked up. Existing databases get the new table and column on the first request after deploying; nothing needs to be run by hand.
 
 ## Card sign-in (tap without a password)
 
@@ -222,7 +238,9 @@ Not covered: someone with the unlocked phone, or who can read the browser's `loc
 - Web NFC is Chrome on Android only.
 - Without Neon Realtime, updates arrive within about 3 seconds (polling). Vercel functions cannot hold WebSockets open, which is why push comes from Neon's own Realtime service. It is a public beta (SDK `0.x`), limited to some regions, so it is optional and always falls back to polling.
 - On free tiers the database sleeps after a few minutes idle; the first request afterwards takes about a second longer.
-- "Inside now" on the Overview only counts taps made today, so students who never tapped out do not stay "inside" forever.
+- "Inside now" on the Overview counts only running sessions, so students who never tapped out do not stay "inside" after the session ends.
+- Inside/outside is worked out per phone and refreshed from the server when nothing is waiting to upload; two phones scanning the same session can briefly disagree about who is inside.
+- The Google Form import reads CSV (or pasted rows). It does not connect to Google, so the export has to be downloaded again to pick up late registrations.
 
 ## Troubleshooting
 
