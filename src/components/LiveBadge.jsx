@@ -3,7 +3,7 @@ import { useLiveStatus } from '../lib/live.js';
 // "Live" while pages are receiving updates; amber while reconnecting.
 export default function LiveBadge({ className = '', compact = false }) {
   const { connected, push } = useLiveStatus();
-  if (connected === null) return null;
+  if (connected === null) return null; // no connection state yet, so show nothing until it is known
   return (
     <span
       role="status"
@@ -11,6 +11,7 @@ export default function LiveBadge({ className = '', compact = false }) {
       className={`inline-flex h-7 items-center gap-2 rounded-full bg-rail ${compact ? 'px-2.5' : 'px-3'} text-xs font-medium text-plum-900 ${className}`}
     >
       <span className={`h-2 w-2 rounded-full ${connected ? 'live-dot bg-ok' : 'bg-warn'}`} />
+      {/* Compact hides the word on screen but keeps it for screen readers */}
       <span className={compact ? 'sr-only' : undefined}>{connected ? 'Live' : 'Reconnecting'}</span>
     </span>
   );

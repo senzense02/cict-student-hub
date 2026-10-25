@@ -4,6 +4,8 @@ import PageHeader from '../components/PageHeader.jsx';
 import Avatar from '../components/Avatar.jsx';
 import { useLive } from '../lib/live.js';
 
+// Admin page to create accounts, reset passwords and delete users.
+// Staff and students are listed separately because only students have a program and year.
 const ROLE_LABEL = { student: 'Student', staff: 'Event staff', admin: 'Admin' };
 const BLANK = { studentId: '', name: '', password: '', role: 'staff', program: 'BSCS', yearLevel: 1 };
 
@@ -15,19 +17,19 @@ export default function AdminUsers() {
 
   const load = () => api('/users').then(setUsers).catch((e) => setMsg(e.message));
   useEffect(() => { load(); }, []);
-  useLive(['users'], load);
+  useLive(['users'], load); // accounts made or removed by another admin appear without a reload
 
   const create = async (e) => {
     e.preventDefault();
     setMsg('');
     try {
-      // Staff have no program or year, so don't send them
+      // Staff have no program or year, so leave them out of the request
       const { program, yearLevel, ...rest } = form;
       await api('/users', { method: 'POST', body: form.role === 'student' ? form : rest });
-      // Keep the role, program and year so several students in a row can be added quickly
+      // Keep the role, program and year so several accounts in a row can be added quickly
       setForm({ ...form, studentId: '', name: '', password: '' });
       setMsg('Account created.');
-      setView(form.role === 'student' ? 'students' : 'staff'); // show the account that was just made
+      setView(form.role === 'student' ? 'students' : 'staff'); // switch to the list that holds the new account
       load();
     } catch (err) {
       setMsg(err.message);

@@ -11,12 +11,14 @@ import PageHeader from '../components/PageHeader.jsx';
 import Ring from '../components/Ring.jsx';
 import Icon from '../components/Icon.jsx';
 
+// Time of day for the greeting
 const part = () => {
   const h = new Date().getHours();
   return h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
 };
 
-const toQuery = (filters) => new URLSearchParams(Object.entries(filters).filter(([, v]) => v)).toString();
+// Empty filters are left out of the URL
+const toQuery =(filters) => new URLSearchParams(Object.entries(filters).filter(([, v]) => v)).toString();
 
 function Chips({ label, value, options, onChange }) {
   return (
@@ -41,7 +43,7 @@ export default function ReviewBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showUpload, setShowUpload] = useState(false);
-  // The filter panel can be tucked away; the choice is remembered on this device
+  // The filter panel can be tucked away. The choice is remembered on this device.
   const [filtersOpen, setFiltersOpen] = useState(() => {
     try { return localStorage.getItem('cict_filters_open') !== '0'; } catch { return true; }
   });
@@ -51,7 +53,8 @@ export default function ReviewBoard() {
     try { localStorage.setItem('cict_filters_open', next ? '1' : '0'); } catch { /* storage unavailable: fine */ }
   };
 
-  // Latest values for the live updater, which runs outside React's render cycle
+  // Refs hold the latest values for the live updater, which runs outside React's render cycle
+  // and would otherwise read stale state.
   const voteState = useRef(new Map()); // reviewer id -> votes still on their way to the server
   const voteEpoch = useRef(0);         // changes whenever a vote starts or finishes (see syncLive)
   const filtersRef = useRef(filters);
@@ -66,7 +69,7 @@ export default function ReviewBoard() {
   const pick = (k) => (v) => setFilters({ ...filters, [k]: v });
 
   useEffect(() => {
-    // small debounce so typing in the search boxes doesn't spam the API
+    // Wait 300ms after the last change so typing in the search boxes doesn't spam the API
     const t = setTimeout(async () => {
       setLoading(true);
       setError('');
@@ -93,7 +96,9 @@ export default function ReviewBoard() {
     try {
       const list = await api(`/resources?${toQuery(mine)}`);
       if (filtersRef.current !== mine) return;
-      if (voteEpoch.current !== epoch) return; // a vote started or finished meanwhile: this list may be older than it. Its own change will trigger a fresh refresh
+      // A vote started or finished while we waited, so this list may be older than the vote.
+      // The vote's own change triggers a fresh refresh.
+      if (voteEpoch.current !== epoch) return;
       const { merged, incoming: news } = mergeResources(itemsRef.current, list, user.id);
       freshRef.current = list;
       // a card whose vote is still on its way keeps what the voter sees

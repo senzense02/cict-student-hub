@@ -10,6 +10,7 @@ import Icon from './Icon.jsx';
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const when = (iso) => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
+// One line under a session's name: who started it and how many people have shown up
 function describe(s) {
   const by = s.createdByName || 'a deleted account';
   if (s.status === 'active') {
@@ -61,12 +62,14 @@ export default function SessionList({ onOpen, onNavigate, notice, onDismiss }) {
 
   const load = () =>
     api('/attendance/sessions')
+      // finished sessions live in the Door log, not here
       .then((list) => { setSessions(list.filter((s) => s.status !== 'ended')); setError(''); })
       .catch((e) => setError(e.message));
   useEffect(() => { load(); }, []);
-  useLive(['sessions', 'door'], load);
+  useLive(['sessions', 'door'], load); // reload when a session changes or a card is tapped
   const fresh = useFresh((sessions || []).map((s) => s.id));
 
+  // Only an admin or the person who created the session can set it up or delete it
   const mayManage = (s) => user.role === 'admin' || s.createdBy === user.id;
   const remove = async (s) => {
     if (!confirm(`Delete "${s.name}"? Its registration list is deleted too.`)) return;

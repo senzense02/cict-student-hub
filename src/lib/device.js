@@ -1,6 +1,6 @@
-// The key that lets THIS browser sign in by tapping the ID card without a password.
-// A card's serial number is not secret, so the server also wants this random key, which it only hands the
-// browser's trust to after the student confirmed with their password. It survives logging out on purpose.
+// A random key that lets THIS browser sign in by tapping the ID card, with no password.
+// A card's serial number is not secret, so the server also checks this key. The server only trusts a key
+// after the student confirmed with their password. The key is kept after logging out on purpose.
 const NAME = 'cict_device';
 
 export function deviceKey({ create = false } = {}) {

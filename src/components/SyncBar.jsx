@@ -3,6 +3,7 @@ import { syncAll } from '../lib/offline.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import Icon from './Icon.jsx';
 
+// Shows how many scans are still waiting on this phone and uploads them on demand.
 export default function SyncBar({ pending, onSynced }) {
   const { user } = useAuth();
   const [msg, setMsg] = useState('');
@@ -13,6 +14,7 @@ export default function SyncBar({ pending, onSynced }) {
     setMsg('');
     try {
       const r = await syncAll(user.role);
+      // The server can refuse some records for this account. Say so instead of hiding it
       const rej = r.rejected ? r.rejected.events : 0;
       setMsg(r.sent ? `Uploaded ${r.sent} record${r.sent === 1 ? '' : 's'}.` : 'Nothing to upload.');
       if (rej) setMsg((m) => `${m} ${rej} not accepted for this account.`);
@@ -20,7 +22,7 @@ export default function SyncBar({ pending, onSynced }) {
       setMsg(`Could not sync: ${e.message}. Your data is safe on this phone.`);
     } finally {
       setBusy(false);
-      onSynced?.();
+      onSynced?.(); // runs even after a failure, so the waiting count stays correct
     }
   };
 

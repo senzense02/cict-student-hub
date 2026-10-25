@@ -24,21 +24,24 @@ export default function ImportModal({ sessionId, existing, onClose, onDone }) {
     const body = titled ? rows.slice(1) : rows;
     return { header, body, guess: guessColumns(header, body) };
   }, [text]);
+  // The guess is used until the person picks a column themselves
   const cols = picked || table.guess;
   const preview = useMemo(
     () => (table.body.length && cols.id >= 0 ? rosterFromRows(table.body, cols.id, cols.name) : null),
     [table, cols.id, cols.name]
   );
+  // Block the import here too, so staff see why instead of the server refusing it
   const tooMany = preview && preview.list.length > MAX_ROWS;
 
   const onFile = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    // Checked before reading, so a huge file is never loaded into memory
     if (file.size > 2_000_000) return setError('That file is over 2 MB. A Google Form export is much smaller, so check that it is the right file.');
     try {
       setText(await file.text());
       setFileName(file.name);
-      setPicked(null);
+      setPicked(null); // a new file has different columns, so drop any earlier choice
       setError('');
     } catch {
       setError('Could not read that file.');
@@ -55,10 +58,11 @@ export default function ImportModal({ sessionId, existing, onClose, onDone }) {
       onDone(await api(`/attendance/sessions/${sessionId}/roster`, { method: 'POST', body: { rows: preview.list, mode } }));
     } catch (err) {
       setError(err.message);
-      setBusy(false);
+      setBusy(false); // on success the parent closes this popup, so busy is only reset on failure
     }
   };
 
+  // Changing one column leaves the other as it was
   const pick = (key) => (e) => setPicked({ ...cols, [key]: Number(e.target.value) });
 
   return (

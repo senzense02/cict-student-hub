@@ -4,8 +4,10 @@ import Avatar from './Avatar.jsx';
 export const ACTION_LABEL = { CHECK_IN: 'Checked in', RE_ENTRY: 'Came back in', TEMPORARY_EXIT: 'Temporary exit', UNKNOWN_CARD: 'Unregistered card' };
 const DOT = { CHECK_IN: 'bg-ok', RE_ENTRY: 'bg-ok', TEMPORARY_EXIT: 'bg-warn', UNKNOWN_CARD: 'bg-bad' };
 
+// fresh: flash a tap that just arrived
 // showSession: also say which session the tap belongs to (the by-day view mixes sessions)
 export default function TapRow({ e, fresh = false, showSession = false }) {
+  // Falls back to 'Deleted session' (the session has no name) or 'No session' (the tap has none)
   const sessionName = showSession ? (e.session ? e.session.name || 'Deleted session' : 'No session') : null;
   return (
     <div className={`row cv-row flex-wrap ${fresh ? 'flash' : ''}`}>

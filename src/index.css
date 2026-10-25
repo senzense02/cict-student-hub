@@ -62,14 +62,19 @@
 
   .note { @apply text-sm text-muted; }
   .alert { @apply rounded-2xl bg-bad-soft px-4 py-3 text-sm text-bad-ink; }
-  .tile { @apply rounded-3xl p-5; }
+  /* Stat tile: big number (with an optional ring) on top, label underneath. The label gets the full tile
+     width because, beside the ring, a half-width tile on a phone has no room for words like "Temporarily".
+     Tighter padding on phones leaves room for 3-digit counts next to the ring; if a number is still too wide,
+     the ring wraps under it instead of spilling out of the tile. */
+  .tile { @apply rounded-3xl p-4 sm:p-5; }
+  .tile-top { @apply flex flex-wrap items-center justify-between gap-2; }
   .row { @apply flex items-center justify-between gap-3 border-b border-line/70 px-4 py-3 last:border-b-0; }
 }
 
-/* Light motion, kept deliberately small: only opacity and transform are animated (cheap even on
-   old phones), every effect is short, and all of it is switched off for people who ask for reduced motion.
-   Entrance animations use fill-mode `backwards` (not `both`): the element returns to its normal styles when
-   the animation ends, so hover and press transforms still work afterwards. */
+/* Light motion, kept small: only opacity and transform are animated (cheap even on old phones), every
+   effect is short, and all of it is switched off for people who ask for reduced motion.
+   Entrance animations use fill-mode `backwards` (not `both`) so the element returns to its normal styles
+   when the animation ends. That way hover and press transforms still work afterwards. */
 @keyframes pop { from { transform: scale(0.97); opacity: 0.5; } to { transform: none; opacity: 1; } }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
@@ -104,6 +109,7 @@
 .cv { content-visibility: auto; contain-intrinsic-size: auto 210px; }
 .cv-row { content-visibility: auto; contain-intrinsic-size: auto 56px; }
 
+/* Press feedback shared by buttons and chips */
 .btn, .chip, .btn-text { transition-property: color, background-color, border-color, opacity, transform; transition-duration: 0.15s; }
 .btn:active:not(:disabled), .chip:active, .btn-text:active:not(:disabled) { transform: scale(0.97); }
 

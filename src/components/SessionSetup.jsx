@@ -32,6 +32,7 @@ export default function SessionSetup({ session, roster, canManage, onChanged, on
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
 
+  // inHub: on the list and has a Hub account. noCard: of those, no ID card linked, so they cannot be scanned yet
   const inHub = roster.filter((r) => r.userId);
   const notInHub = roster.filter((r) => !r.userId);
   const noCard = inHub.filter((r) => !r.hasCard);

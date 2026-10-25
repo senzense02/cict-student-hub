@@ -13,15 +13,15 @@ import PageBoundary from './components/PageBoundary.jsx';
 import PageSkeleton from './components/PageSkeleton.jsx';
 import Login from './pages/Login.jsx'; // stays in the main file: it is the first thing a new visitor sees
 
-// Which tabs each role can see
+// Which tabs each role can see:
 //  student: the review board
 //  staff:   door scanner, door log (+ review board)
 //  admin:   overview, review board (verify/delete), door log, ID cards, users
-// The server enforces the same rules (requireRole); hiding a tab here is only about not showing buttons
-// that would be refused.
-// `short` is the label under the icon in the phone's bottom bar (default: the first word), needed because
-// "Door scanner" and "Door log" would both read "Door".
-// Each tab's code is its own file, downloaded the first time it is needed. `load` starts that download.
+// The server enforces the same rules (requireRole). Hiding a tab here only avoids showing buttons that
+// would be refused.
+// `short` is the label under the icon in the phone's bottom bar (default: the first word). It is needed
+// because "Door scanner" and "Door log" would both read "Door".
+// Each tab's page is its own file, downloaded the first time it is needed. `load` starts that download.
 const TABS = [
   { id: 'overview', label: 'Overview', icon: 'overview', roles: ['admin'], load: () => import('./pages/Overview.jsx') },
   { id: 'board', label: 'Review board', icon: 'board', roles: ['student', 'staff', 'admin'], load: () => import('./pages/ReviewBoard.jsx') },
@@ -33,8 +33,8 @@ const TABS = [
 const HOME = { admin: 'overview', staff: 'door' }; // where each role lands the first time
 const ROLE_LABEL = { student: 'Student', staff: 'Event staff', admin: 'Admin' };
 
-// Start downloading the tab this person will most likely land on while React is still starting up, instead of
-// after it. Someone who is not signed in (or has storage turned off) just skips this.
+// Start downloading the tab this person will most likely open while React is still starting up, not after.
+// Someone who is not signed in (or has storage turned off) just skips this.
 try {
   const saved = JSON.parse(localStorage.getItem('cict_user'));
   if (saved) {
@@ -58,7 +58,7 @@ export default function App() {
   const role = user && (ROLE_LABEL[user.role] ? user.role : 'student'); // unknown/old roles get student access
   const showCard = role === 'student' || role === 'staff'; // admins manage cards from the ID cards tab
   const tabs = user ? TABS.filter((t) => t.roles.includes(role)) : [];
-  const [tab, setTab] = useState(() => localStorage.getItem('cict_tab'));
+  const [tab, setTab] = useState(() => localStorage.getItem('cict_tab')); // last tab used, remembered between visits
   // Right after signing up, offer to link the ID card once (Login sets this flag)
   const [offerCard, setOfferCard] = useState(false);
   useEffect(() => {
@@ -100,7 +100,8 @@ export default function App() {
     return () => setAuthLostHandler(null);
   }, [signOut]);
 
-  // Keep the card status right when an admin links or changes the card, and when the saved login is from an older version
+  // Keeps the card status current when an admin links or changes the card, and fills in anything missing
+  // from a login saved by an older version
   const refreshMe = () => {
     if (!user || user.role === 'admin') return;
     api('/auth/me').then(({ user: me }) => updateUser({ ...user, ...me })).catch(() => {});
@@ -110,6 +111,7 @@ export default function App() {
 
   if (!user) return <Login />;
 
+  // A saved tab this role may not open falls back to the role's home tab
   const current = tabs.find((t) => t.id === tab) || tabs.find((t) => t.id === HOME[role]) || tabs[0];
   const View = current.view;
   const choose = (id) => {
@@ -154,6 +156,7 @@ export default function App() {
               <button onClick={signOut} className="btn btn-soft btn-sm"><Icon name="logout" size={15} />Log out</button>
             </div>
           </div>
+          {/* On phones the bottom padding keeps content clear of the fixed bottom bar */}
           <main className="flex-1 p-5 pb-28 md:p-9 md:pb-9">
             <div key={current.id} className="page-in">
               <PageBoundary key={current.id}>
@@ -166,6 +169,7 @@ export default function App() {
 
       {offerCard && role === 'student' && <CardLinkModal onClose={closeOffer} />}
 
+      {/* Phone bottom bar, only worth showing with more than one tab. The bottom padding keeps it clear of the phone's home bar. */}
       {tabs.length > 1 && (
         <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t border-line bg-rail px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden" aria-label="Main">
           {tabs.map((t) => {

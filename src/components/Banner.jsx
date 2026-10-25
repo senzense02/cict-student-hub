@@ -10,7 +10,7 @@ const KINDS = {
   blue: { cls: 'bg-plum-700 text-white', icon: 'info' },
 };
 
-// Shows a scan result for a couple of seconds. show({ kind, title, subtitle }) / show(null)
+// Holds the current scan result and clears it after `ms`. show({ kind, title, subtitle }) sets it, show(null) clears it.
 export function useBanner(ms = 2600) {
   const [banner, setBanner] = useState(null);
   useEffect(() => {
@@ -18,15 +18,18 @@ export function useBanner(ms = 2600) {
     const t = setTimeout(() => setBanner(null), ms);
     return () => clearTimeout(t);
   }, [banner, ms]);
+  // `at` makes every result unique, so two identical scans in a row still restart the timer and replay the animation
   const show = (b) => setBanner(b ? { ...b, at: Date.now() } : null);
   return [banner, show];
 }
 
 export default function Banner({ banner }) {
   useEffect(() => {
+    // One short buzz for ok and exit, a double buzz for a problem. Not every browser has vibrate
     if (banner && navigator.vibrate) navigator.vibrate(banner.kind === 'red' ? [120, 60, 120] : 80);
   }, [banner]);
 
+  // Idle state. Same height as a result so the layout does not jump when one appears
   if (!banner)
     return (
       <div className="flex min-h-[148px] items-center gap-5 rounded-[28px] bg-rail px-7">
@@ -40,6 +43,7 @@ export default function Banner({ banner }) {
 
   const k = KINDS[banner.kind];
   return (
+    // key={banner.at} replays the pop animation for each new scan
     <div key={banner.at} role="status" aria-live="polite" className={`pop flex min-h-[148px] items-center gap-5 rounded-[28px] px-7 ${k.cls}`}>
       <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-white/25"><Icon name={k.icon} size={30} /></span>
       <div className="min-w-0">

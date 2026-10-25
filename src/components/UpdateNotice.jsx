@@ -7,25 +7,27 @@ import Icon from './Icon.jsx';
 const RUNNING = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev';
 
 // Pages left open (a phone on the door, a laptop in the lab) never reload by themselves.
-// Signed-in pages learn about a new deploy within seconds from the live feed; /version.json is checked
-// every minute and whenever the tab comes back as a backup (it also covers the sign-in page).
-// Either way it only offers a refresh.
-// Nothing is reloaded automatically, so a scan in progress is never interrupted, and queued scans stay saved.
+// Signed-in pages hear about a new deploy within seconds from the live feed. As a backup, /version.json is
+// checked every minute and whenever the tab comes back (this also covers the sign-in page).
+// It only offers a refresh and never reloads on its own, so a scan in progress is not interrupted
+// and queued scans stay saved.
 export default function UpdateNotice() {
   const [available, setAvailable] = useState(false);
   const [hidden, setHidden] = useState(false);
   const { user } = useAuth();
 
-  // Instant path: the server tells us which build is live
+  // Instant path: the live feed tells us which build is running on the server
   useEffect(() => {
     if (!user) return undefined;
     return onBuild((build) => { if (build !== RUNNING) setAvailable(true); });
   }, [user]);
 
+  // Backup path: poll /version.json
   useEffect(() => {
     if (!import.meta.env.PROD) return undefined; // no version.json while developing
     const check = async () => {
-      if (document.visibilityState !== 'visible') return;
+      if (document.visibilityState !== 'visible') return; // skip in the background; the visibilitychange listener checks again on return
+      // The timestamp and no-store stop the browser from serving an old copy of the file
       try {
         const res = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' });
         if (!res.ok) return;

@@ -1,3 +1,5 @@
+// Build setup. The build id makes returning visitors notice a new deploy, and the two small plugins below
+// fill in things that are only known after the build (the service worker's cache name, the font file names).
 import fs from 'node:fs';
 import path from 'node:path';
 import { defineConfig } from 'vite';

@@ -6,6 +6,7 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
+    // Blocked storage or a broken saved value just means starting signed out
     try {
       return JSON.parse(localStorage.getItem('cict_user'));
     } catch {

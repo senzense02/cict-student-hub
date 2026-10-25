@@ -37,6 +37,7 @@ export const store = {
 export const uid = () =>
   crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+// Downloads the student list and keeps a copy on the phone for offline scanning
 export async function refreshStudents() {
   const list = await api('/students');
   store.setStudents(list);
@@ -65,6 +66,7 @@ export async function syncAll(role) {
 
   const { accepted, rejected } = await api('/attendance/sync', { method: 'POST', body: { events } });
 
+  // Only taps the server accepted leave the queue; any it rejected stay on the phone
   const done = new Set(accepted.events);
   store.setEvents(store.events().filter((e) => !done.has(e.clientId)));
   return { sent: accepted.events.length, rejected };

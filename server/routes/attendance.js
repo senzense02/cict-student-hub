@@ -11,10 +11,11 @@ const router = express.Router();
 router.use(auth);
 
 const DOOR_ACTIONS = ['CHECK_IN', 'TEMPORARY_EXIT', 'RE_ENTRY', 'UNKNOWN_CARD'];
+// client ids are made on the phone, so check they are present and a sane length
 const okClientId = (v) => v != null && String(v).length > 0 && String(v).length <= 100;
 const MAX_ROSTER = 5000; // same ceiling as the student roster the scanner downloads
 
-// ---- sessions ------------------------------------------------------------------------------------------
+// Sessions
 // A session is one event: draft (being set up) -> active (scanning) -> ended (listed in the Door log).
 // Anyone on staff can see every session and scan into a running one, so two phones can share an event.
 // Only the person who created a session (or an admin) can import its list, start it, end it or delete it.
@@ -191,7 +192,7 @@ router.delete('/sessions/:id', requireRole('staff', 'admin'), asyncHandler(async
   res.json({ deleted: true, taps });
 }));
 
-// ---- door taps -----------------------------------------------------------------------------------------
+// Door taps
 
 // Idempotent upload of everything queued on a phone. Safe to call again after a dropped connection.
 // body: { events: [{ clientId, student, token, action, scannedAt, session }] }

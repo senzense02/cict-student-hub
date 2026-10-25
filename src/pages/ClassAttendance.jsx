@@ -10,7 +10,9 @@ import Avatar from '../components/Avatar.jsx';
 import { store, uid, refreshStudents, pendingCount } from '../lib/offline.js';
 import { inRoster, tapStatus, toCsv } from '../lib/logic.js';
 
-const STATUSES = ['present', 'late', 'excused', 'absent'];
+// Class attendance for teachers. Sessions and marks are saved on the phone first (marked dirty)
+// and uploaded later, so taking attendance still works without internet.
+const STATUSES =['present', 'late', 'excused', 'absent'];
 const TEXT = { present: 'text-ok', late: 'text-warn-ink', excused: 'text-plum-700', absent: 'text-bad-ink', unmarked: 'text-muted' };
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
@@ -45,6 +47,7 @@ export default function ClassAttendance() {
     api('/attendance/sessions').then(setServerSessions).catch(() => {});
   }, []);
 
+  // Teachers see only their own sessions; admins see all of them
   const mine = sessions.filter((s) => user.role === 'admin' || s.teacher === user.id);
   const active = mine.find((s) => s.clientId === activeId && !s.endedAt) || null;
   const roster = useMemo(() => (active ? students.filter((s) => inRoster(active, s)) : []), [active, students]);
@@ -56,6 +59,7 @@ export default function ClassAttendance() {
     setSessions(list);
     refreshPending();
   };
+  // Marks are keyed by session and student, so marking again replaces the earlier mark
   const setMark = (session, student, status, source) => {
     const key = `${session.clientId}:${student.id}`;
     const m = { clientId: key, sessionId: session.clientId, student: student.id, status, source, markedAt: new Date().toISOString(), dirty: true };
@@ -94,6 +98,7 @@ export default function ClassAttendance() {
     if (!student) return setBanner({ kind: 'red', title: 'Unregistered card', subtitle: token });
     if (!inRoster(active, student)) return setBanner({ kind: 'red', title: 'Not in this class', subtitle: student.name });
     const existing = markFor(active.clientId, student.id);
+    // A tap can replace an absent mark, but never a present, late or excused one
     if (existing && existing.status !== 'absent') return setBanner({ kind: 'blue', title: 'Already marked', subtitle: `${student.name} is ${existing.status}` });
     const status = tapStatus(active);
     setMark(active, student, status, 'nfc');
@@ -107,8 +112,10 @@ export default function ClassAttendance() {
       serverMarks = r.marks.map((m) => ({ student: String(m.student), status: m.status }));
     } catch { /* offline or not uploaded yet: local marks only */ }
     const byStudent = new Map(serverMarks.map((m) => [m.student, m.status]));
+    // Marks saved on this phone win over server ones, since they may be newer and not uploaded yet
     for (const m of Object.values(store.marks())) if (m.sessionId === session.clientId) byStudent.set(m.student, m.status);
 
+    // Once a session has ended, students without a mark count as absent
     const rows = students.filter((s) => inRoster(session, s)).map((s) => ({
       studentId: s.studentId, name: s.name, section: s.section || '',
       status: byStudent.get(s.id) || (session.endedAt ? 'absent' : 'unmarked'),
@@ -125,7 +132,8 @@ export default function ClassAttendance() {
     URL.revokeObjectURL(a.href);
   };
 
-  const allSessions = [...mine, ...serverSessions.filter((s) => !mine.some((m) => m.clientId === s.clientId))].sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+  // This phone's sessions plus any the server has that this phone does not, newest first
+  const allSessions =[...mine, ...serverSessions.filter((s) => !mine.some((m) => m.clientId === s.clientId))].sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
 
   if (report) {
     const count = (k) => report.rows.filter((r) => r.status === k).length;
@@ -138,12 +146,12 @@ export default function ClassAttendance() {
           <button onClick={download} className="btn btn-primary">Download CSV</button>
         </PageHeader>
         <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
-          <div className="tile bg-plum-100 flex items-center justify-between gap-2 col-span-2 lg:col-span-1">
-            <div>
+          <div className="tile bg-plum-100 col-span-2 lg:col-span-1">
+            <div className="tile-top">
               <p className="font-display text-[2.4rem] font-medium leading-none tabular-nums">{attended}<span className="text-xl text-muted">/{report.rows.length}</span></p>
-              <p className="mt-1.5 text-sm">Attended</p>
+              <Ring value={attended} total={report.rows.length} size={54} stroke={7} />
             </div>
-            <Ring value={attended} total={report.rows.length} size={54} stroke={7} />
+            <p className="mt-1.5 text-sm">Attended</p>
           </div>
           {tiles.map(([k, tint]) => (
             <div key={k} className={`tile ${tint}`}>

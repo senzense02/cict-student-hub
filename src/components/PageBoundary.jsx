@@ -5,6 +5,7 @@ import { Component } from 'react';
 export default class PageBoundary extends Component {
   state = { failed: false };
 
+  // Any error while this tab loads or renders switches to the fallback below
   static getDerivedStateFromError() {
     return { failed: true };
   }

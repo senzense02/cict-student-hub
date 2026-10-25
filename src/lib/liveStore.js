@@ -1,18 +1,19 @@
 // One shared connection for the whole app. Pages subscribe to topics ("resources", "door", "users");
-// when a topic's counter moves on the server, the pages that care refresh their data.
+// when a topic's counter changes on the server, the pages that care reload their data.
 //
-// Two ways to learn that a counter moved:
-//  - PUSH (when Neon Realtime is configured on the server): a live connection delivers counter changes
-//    the moment they commit. GET /api/live is then called only about once a minute, to renew the
-//    60-second sealed query and as a safety net.
-//  - POLL (always available, and the automatic fallback): GET /api/live every few seconds.
-// Polling pauses while the tab is hidden and resumes the moment it is visible again.
+// Two ways to learn that a counter changed:
+//  - Push (when Neon Realtime is set up on the server): a live connection delivers changes as they
+//    commit. GET /api/live is then called only about once a minute, to renew the 60-second sealed
+//    query and as a safety net.
+//  - Poll (always available, and the fallback): GET /api/live every few seconds.
+// Polling pauses while the tab is hidden and resumes as soon as it is visible again.
 import { api } from '../api.js';
 import { changedTopics } from './logic.js';
 
 export const FAST_MS = 3000;  // polling pace while there is no live connection
-export const SLOW_MS = 10000; // while the server cannot be reached
+export const SLOW_MS = 10000; // polling pace while the server cannot be reached
 export const RENEW_BEFORE_MS = 10000; // renew the sealed query this long before it expires
+// Limits on the gap between /live calls while push is live
 export const MIN_PUSH_POLL_MS = 5000;
 export const MAX_PUSH_POLL_MS = 50000;
 
@@ -20,15 +21,15 @@ const changeListeners = new Set(); // (changedTopics) => void
 const buildListeners = new Set();  // (buildId) => void
 let authLost = null;               // called when the server says this login is no longer valid
 
-let holders = 0;
+let holders = 0;      // number of subscribers; polling runs only while there is at least one
 let running = false;
-let inFlight = false;
+let inFlight = false; // a /live request is in progress, so never start a second one
 let timer = null;
 let snapshot = null;  // last counters we saw
-let failures = 0;
-let lastBuild = null;
+let failures = 0;     // failed check-ins in a row
+let lastBuild = null; // given straight away to anyone who subscribes later
 
-// live connection (Neon Realtime)
+// Live connection (Neon Realtime)
 let pushClient = null;
 let pushUrl = null;
 let pushSub = null;
@@ -36,12 +37,14 @@ let pushLive = false;   // the live connection is delivering authoritative resul
 let pushBroken = false; // could not even be set up: stop trying for this page load
 let pushPollMs = MAX_PUSH_POLL_MS;
 
+// Server messages that mean this login is no longer valid
 const AUTH_ERRORS = /not authenticated|invalid or expired|no longer exists/i;
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 const visible = () => document.visibilityState === 'visible';
 
-// Compare with what we last saw and tell the pages whose data moved. Used by both transports,
+// Compare with what we last saw and tell the pages whose data changed. Both push and polling use this,
 // so the same change arriving twice (push, then a poll) is only announced once.
+// The very first result only sets the baseline, so nothing is announced then.
 function applyTopics(next) {
   if (snapshot) {
     const changed = changedTopics(snapshot, next);
@@ -50,6 +53,7 @@ function applyTopics(next) {
   snapshot = next;
 }
 
+// Back off when the server is failing; relax to renewal pace while push is live
 const nextDelay = () => (failures ? SLOW_MS : pushLive ? pushPollMs : FAST_MS);
 
 function reschedule() {
@@ -58,7 +62,7 @@ function reschedule() {
   timer = setTimeout(poll, nextDelay());
 }
 
-// ---- push (Neon Realtime) -------------------------------------------------------------------------
+// Push (Neon Realtime)
 
 function onPush({ status, data }) {
   const live = status === 'live';
@@ -112,11 +116,12 @@ function closePush() {
   pushBroken = false;
 }
 
-// ---- the check-in request -------------------------------------------------------------------------
+// The check-in request (GET /api/live)
 
 async function poll() {
   timer = null;
   if (!running || inFlight) return;
+  // A hidden tab skips the request; wake() checks right away when it is visible again
   if (visible()) {
     inFlight = true;
     try {
@@ -129,7 +134,7 @@ async function poll() {
       }
       if (realtime && !pushBroken) await syncPush(realtime, now);
     } catch (err) {
-      if (AUTH_ERRORS.test(err.message)) authLost?.();
+      if (AUTH_ERRORS.test(err.message)) authLost?.(); // login is no longer valid: let the app sign out
       failures += 1;
     } finally {
       inFlight = false;
@@ -138,7 +143,7 @@ async function poll() {
   if (running) timer = setTimeout(poll, nextDelay());
 }
 
-// Back on screen or back online: check right away instead of waiting for the next tick
+// Back on screen or back online: check right away instead of waiting for the next timer tick
 function wake() {
   if (!running || !visible()) return;
   clearTimeout(timer);
@@ -165,6 +170,7 @@ function stop() {
   window.removeEventListener('online', wake);
 }
 
+// Polling starts with the first subscriber and stops with the last
 const hold = () => { if (holders++ === 0) start(); };
 const release = () => { if (--holders === 0) stop(); };
 

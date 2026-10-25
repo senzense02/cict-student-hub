@@ -13,6 +13,7 @@ import { bump } from '../live.js';
 const router = express.Router();
 router.use(auth);
 
+// Uploads are limited to these types: a PDF, or plain text and code that people can read in the browser
 const ALLOWED = ['.pdf', '.md', '.txt', '.js', '.py', '.java', '.c', '.cpp', '.html', '.css', '.sql'];
 const MAX_BYTES = 4 * 1024 * 1024; // Vercel rejects request bodies over 4.5 MB
 const upload = multer({
@@ -29,6 +30,7 @@ const uploadOne = (req, res, next) =>
     next(err);
   });
 
+// Makes % and _ match themselves in a LIKE search instead of acting as wildcards
 const likeEscape = (s) => s.replace(/[\\%_]/g, '\\$&');
 
 // One resource joined with its uploader, verifier and this user's vote
@@ -66,7 +68,7 @@ const getShaped = async (id, userId) => {
 router.get('/', asyncHandler(async (req, res) => {
   const { program, yearLevel, courseCode, q, sort, verified } = req.query;
   const params = [req.user.id];
-  const add = (v) => `$${params.push(v)}`;
+  const add = (v) => `$${params.push(v)}`; // stores the value and returns its $n placeholder, so values never enter the SQL text
   const where = [];
 
   if (program && program !== 'ALL') where.push(`r.program IN (${add(String(program))}, 'BOTH')`);
@@ -99,6 +101,7 @@ router.post('/', uploadOne, asyncHandler(async (req, res) => {
   if (!Number.isInteger(yearLevel) || yearLevel < 1 || yearLevel > 4) return res.status(400).json({ message: 'Year level must be 1 to 4' });
 
   const ext = path.extname(req.file.originalname).toLowerCase();
+  // Anything that is not a PDF is served as plain text, so an uploaded .html or .js is shown and never run
   const contentType = ext === '.pdf' ? 'application/pdf' : 'text/plain; charset=utf-8';
   const storageKey = await saveFile({ buffer: req.file.buffer, ext, contentType });
 
@@ -129,7 +132,7 @@ router.get('/:id/file', asyncHandler(async (req, res) => {
 
   res.set('Content-Type', r.content_type);
   res.set('Content-Disposition', `inline; filename="${encodeURIComponent(r.file_name)}"`);
-  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('X-Content-Type-Options', 'nosniff'); // the browser must use the type above and not guess another
   if (file.buffer) return res.send(file.buffer);
   await pipeline(file.stream, res);
 }));

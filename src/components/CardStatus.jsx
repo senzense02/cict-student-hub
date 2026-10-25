@@ -8,7 +8,7 @@ export default function CardStatus({ className = '', compact = false }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
 
-  if (typeof user.hasCard !== 'boolean') return null; // not known yet
+  if (typeof user.hasCard !== 'boolean') return null; // hasCard is not known yet, so show nothing rather than a wrong status
 
   const linked = user.hasCard;
   const label = linked ? (compact ? 'Linked' : 'Card linked') : (compact ? 'Not linked' : 'Card not linked');

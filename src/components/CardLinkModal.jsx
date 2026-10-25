@@ -17,6 +17,7 @@ export default function CardLinkModal({ onClose }) {
   const linked = user.hasCard || done;
 
   useEffect(() => {
+    // Escape closes the popup
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -30,12 +31,12 @@ export default function CardLinkModal({ onClose }) {
     setError('');
     setLoading(true);
     try {
-      // Students also trust this phone for tap-only sign-in; staff keep tap + password
+      // Students also mark this phone as trusted so a tap alone can sign them in later; staff still need tap + password
       const body = { token: clean, password, deviceKey: user.role === 'student' ? deviceKey({ create: true }) : undefined };
       const { user: me } = await api('/auth/card', { method: 'POST', body });
       updateUser({ ...user, ...me });
       setDone(true);
-      setPassword('');
+      setPassword(''); // do not keep the password around once it has been used
     } catch (err) {
       setError(err.message);
     } finally {
@@ -80,6 +81,7 @@ export default function CardLinkModal({ onClose }) {
               {user.role === 'student' && ' After that, tapping the card signs you in on this phone without a password.'}
             </p>
             {error && <p className="alert" role="alert">{error}</p>}
+            {/* The Card ID field below already lets you type an ID, so the test box is hidden */}
             <ScanControls onToken={(t) => { setToken(t); setError(''); }} manual={false} />
             <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="The card ID shows here after a tap" aria-label="Card ID" className="field font-mono" />
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your password" aria-label="Password" autoComplete="current-password" className="field" />

@@ -78,6 +78,7 @@ router.patch('/:id/password', asyncHandler(async (req, res) => {
 router.delete('/:id', asyncHandler(async (req, res) => {
   if (req.params.id === req.user.id) return res.status(400).json({ message: 'You cannot delete your own account' });
   // Their uploads are deleted with them (ON DELETE CASCADE), so remove the stored files too.
+  // The file keys are read first, because the rows are gone after the delete.
   const files = await query('SELECT storage_key FROM resources WHERE uploader_id = $1', [req.params.id]);
   const rows = await query('DELETE FROM users WHERE id = $1 RETURNING id', [req.params.id]);
   if (!rows.length) return res.status(404).json({ message: 'User not found' });

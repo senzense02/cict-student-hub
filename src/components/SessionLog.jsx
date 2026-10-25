@@ -56,10 +56,12 @@ export default function SessionLog({ id, onBack }) {
   const { session } = data;
   const hasList = roster.length > 0;
   const count = (status) => people.filter((p) => p.status === status).length;
+  // These count different people, not taps, since one person can tap many times
   const offListPeople = new Set(events.filter((e) => e.offList && e.student).map((e) => e.student.id)).size;
   const unknown = events.filter((e) => e.action === 'UNKNOWN_CARD').length;
   const peopleSeen = new Set(events.filter((e) => e.student).map((e) => e.student.id)).size;
 
+  // With a registration list we compare against it. Without one we only count what was scanned
   const tiles = hasList
     ? [
         { label: 'On the list', n: roster.length, tint: 'bg-lilac' },

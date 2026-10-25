@@ -17,6 +17,7 @@ export default function UploadModal({ defaults, onClose, onUploaded }) {
     setError('');
     setLoading(true);
     try {
+      // FormData rather than JSON, because the file travels with the text fields
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => fd.append(k, v));
       fd.append('file', file);

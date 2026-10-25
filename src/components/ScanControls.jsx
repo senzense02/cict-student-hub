@@ -4,6 +4,7 @@ import { normalizeToken } from '../lib/logic.js';
 import Icon from './Icon.jsx';
 
 // Start/stop the phone's NFC reader, plus a manual box so you can test on a laptop.
+// active=false disables starting and simulating. manual=false hides the test box (used when linking your own card).
 export default function ScanControls({ onToken, active = true, manual: showManual = true }) {
   const nfc = useNfc(onToken);
   const [manual, setManual] = useState('');

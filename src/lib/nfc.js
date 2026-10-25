@@ -41,7 +41,7 @@ export function useNfc(onToken) {
     setScanning(false);
   };
 
-  useEffect(() => () => ctrl.current?.abort(), []);
+  useEffect(() => () => ctrl.current?.abort(), []); // stop scanning when the page using this hook goes away
 
   return { supported, scanning, error, start, stop };
 }

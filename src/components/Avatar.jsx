@@ -2,6 +2,7 @@
 const TINTS = ['bg-lilac', 'bg-blush', 'bg-sand', 'bg-iris'];
 
 export function tintFor(text = '') {
+  // Simple string hash. `>>> 0` keeps it a positive number, so the modulo below is never negative
   let h = 0;
   for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return TINTS[h % TINTS.length];

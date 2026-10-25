@@ -15,11 +15,11 @@ function ResourceCard({ resource, index = 0, onVote, canVerify, onVerify, canDel
   const filePath = `/resources/${resource._id}/file`;
   const uploader = resource.uploader?.name || 'Unknown';
 
-  // free the temporary blob URL when it's replaced or the card unmounts
+  // Free the temporary blob URL when it is replaced or the card goes away
   useEffect(() => () => previewUrl && URL.revokeObjectURL(previewUrl), [previewUrl]);
 
   const togglePreview = async () => {
-    if (previewUrl) return setPreviewUrl('');
+    if (previewUrl) return setPreviewUrl(''); // already open: hide it (the effect above frees the blob)
     setBusy(true);
     setErr('');
     try {
@@ -32,10 +32,12 @@ function ResourceCard({ resource, index = 0, onVote, canVerify, onVerify, canDel
   };
 
   const openFile = async () => {
-    const win = window.open('', '_blank'); // open synchronously so popup blockers allow it
+    // Open the tab right away, while still inside the tap, so popup blockers allow it. The file URL is filled in after the download
+    const win = window.open('', '_blank');
     setErr('');
     try {
       const url = await fetchFileUrl(filePath);
+      // If the popup was blocked, load the file in this tab instead
       if (win) win.location.href = url;
       else window.location.href = url;
     } catch (e) {
@@ -52,6 +54,7 @@ function ResourceCard({ resource, index = 0, onVote, canVerify, onVerify, canDel
   );
 
   return (
+    // --i staggers the entrance animation, capped so cards far down the list do not wait long
     <article style={{ '--i': Math.min(index, 8) }} className={`${tintFor(resource.courseCode)} rise lift cv flex min-w-0 flex-col gap-4 rounded-3xl p-5`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-wrap gap-1.5 text-[13px]">
@@ -78,6 +81,7 @@ function ResourceCard({ resource, index = 0, onVote, canVerify, onVerify, canDel
         </div>
         <div className="flex items-center rounded-full bg-white p-0.5" role="group" aria-label="Rating">
           {vote(1, 'up', 'Upvote')}
+          {/* key={score} remounts this number so the tick animation replays whenever it changes */}
           <span key={resource.score} className="tick min-w-6 text-center text-sm font-semibold tabular-nums">{resource.score}</span>
           {vote(-1, 'down', 'Downvote')}
         </div>

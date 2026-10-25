@@ -1,7 +1,7 @@
 // The Door log, for admins and event staff. Two views of the same taps:
 //   By session  every event that was run, open one to see who came and who did not
-//   By day      every tap of one calendar day, whichever session it belongs to (this is how the log worked
-//               before sessions, and it is where taps from before sessions still show up)
+//   By day      every tap of one calendar day, whichever session it belongs to. This is how the log
+//               worked before sessions existed, so taps from before sessions still show up here.
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import PageHeader from '../components/PageHeader.jsx';
@@ -13,6 +13,7 @@ import { useFresh, useLive } from '../lib/live.js';
 
 const FILTERS = [['ALL', 'All'], ['CHECK_IN', 'Check ins'], ['TEMPORARY_EXIT', 'Exits'], ['RE_ENTRY', 'Re-entries'], ['UNKNOWN_CARD', 'Unregistered']];
 
+// Today as YYYY-MM-DD, built from local date parts so it matches the day on the user's clock
 const todayLocal = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -26,7 +27,7 @@ function SessionsView({ onOpen }) {
 
   const load = () =>
     api('/attendance/sessions')
-      .then((list) => { setSessions(list.filter((s) => s.status !== 'draft')); setError(''); }) // a draft has no taps yet
+      .then((list) => { setSessions(list.filter((s) => s.status !== 'draft')); setError(''); }) // drafts are hidden: they have no taps yet
       .catch((e) => setError(e.message));
   useEffect(() => { load(); }, []);
   useLive(['sessions', 'door'], load);
@@ -65,7 +66,7 @@ function SessionsView({ onOpen }) {
   );
 }
 
-// Every door tap of one day, as before. Can be exported as a CSV.
+// Every door tap of one day, with a filter by type of tap and a CSV export
 function DayView() {
   const [date, setDate] = useState(todayLocal());
   const [action, setAction] = useState('ALL');
@@ -73,7 +74,7 @@ function DayView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // silent = a live refresh: no spinner, and a failed attempt is ignored (the next change tries again)
+  // silent = a live refresh: no spinner, and a failure is ignored because the next change tries again
   const load = (silent = false) => {
     if (!silent) { setLoading(true); setError(''); }
     api(`/attendance/log?date=${date}`)
@@ -88,6 +89,7 @@ function DayView() {
   const shown = useMemo(() => (action === 'ALL' ? events : events.filter((e) => e.action === action)), [events, action]);
   const peopleCount = new Set(events.filter((e) => e.student).map((e) => e.student.id)).size;
 
+  // Exports what is on screen (after the type filter)
   const download = () => {
     const rows = shown.map((e) => ({
       time: new Date(e.scannedAt).toLocaleString(),
@@ -105,6 +107,7 @@ function DayView() {
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
+        {/* Future days are blocked, and clearing the field keeps the current day */}
         <input type="date" className="field max-w-[190px]" aria-label="Day" value={date} max={todayLocal()} onChange={(e) => e.target.value && setDate(e.target.value)} />
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Type of tap">
           {FILTERS.map(([v, text]) => (

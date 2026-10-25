@@ -22,7 +22,7 @@ export const toDate = (v) => {
 export const str = (v, max = 200) => String(v ?? '').trim().slice(0, max);
 export const iso = (v) => (v == null ? null : new Date(v).toISOString());
 
-// Postgres unique_violation
+// Postgres error code 23505: a unique value (login ID, card, ...) is already taken
 export const isDuplicate = (err) => err?.code === '23505';
 
 // Student account rules. Shared by self-registration (routes/auth.js) and by an admin creating a student

@@ -7,6 +7,7 @@ import { store, refreshStudents } from '../lib/offline.js';
 import { useLive } from '../lib/live.js';
 
 // Link a school ID card to a student: pick the student, tap the card, save.
+// The student list starts from the copy saved on this phone, then refreshes from the server.
 export default function Cards() {
   const [students, setStudents] = useState(store.students());
   const [query, setQuery] = useState('');
@@ -16,7 +17,8 @@ export default function Cards() {
 
   const load = () => refreshStudents().then(setStudents).catch((e) => setMsg(`Could not load students. ${e.message}`));
   useEffect(() => { load(); }, []);
-  // new students and card changes by another admin show up by themselves
+  // New students and card changes made by another admin show up by themselves.
+  // The open student is swapped for the fresh copy, or kept if they are missing from the new list.
   useLive(['users'], () => refreshStudents().then((list) => {
     setStudents(list);
     setSelected((prev) => prev && (list.find((s) => s.id === prev.id) || prev));
@@ -28,6 +30,7 @@ export default function Cards() {
     try {
       await api(`/students/${selected.id}`, { method: 'PATCH', body });
       setMsg('Saved.');
+      // Reload so the list and the open student show the saved card
       const list = await refreshStudents();
       setStudents(list);
       setSelected(list.find((s) => s.id === selected.id));
@@ -36,6 +39,7 @@ export default function Cards() {
     }
   };
 
+  // Show at most 60 matches to keep the list short; searching narrows it
   const shown = students.filter((s) => `${s.name} ${s.studentId}`.toLowerCase().includes(query.toLowerCase())).slice(0, 60);
   const linked = students.filter((s) => s.nfcToken).length;
 

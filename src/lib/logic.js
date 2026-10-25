@@ -1,6 +1,6 @@
 // Pure functions (no browser APIs) so they are easy to test.
 
-// "04:a1:b2:c3" -> "04A1B2C3"
+// "04:a1:b2:c3" -> "04A1B2C3", so a card compares equal however the reader formats its serial number
 export const normalizeToken = (t = '') => String(t).replace(/[^0-9a-f]/gi, '').toUpperCase();
 
 // Door state machine. state: undefined (never scanned) | 'INSIDE' | 'OUTSIDE'
@@ -51,7 +51,7 @@ export function mergeResources(current, fresh, myId) {
   };
 }
 
-// ---- registration lists (Google Form exports) ----------------------------------------------------------
+// Registration lists (Google Form exports)
 
 // Student IDs look like "25-1167" (same rule as the server's STUDENT_ID_REGEX)
 export const STUDENT_NO = /^\d{2,4}-\d{3,6}$/;

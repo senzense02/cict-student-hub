@@ -21,13 +21,14 @@ export default function Overview({ onNavigate }) {
 
   useEffect(() => {
     load();
-    // the live feed does the real work; this only keeps "today" correct across midnight
+    // The live feed does the real work. This slow refresh only keeps the "today" counts correct across
+    // midnight, and it is skipped while the tab is hidden.
     const t = setInterval(() => document.visibilityState === 'visible' && load(), 60000);
     return () => clearInterval(t);
   }, []);
   useLive(['door', 'resources', 'users'], load);
 
-  // rows that just arrived flash once
+  // Rows that just arrived flash once
   const freshTaps = useFresh(data ? data.recent.map((e) => e.clientId) : []);
   const freshPending = useFresh(data ? data.pendingResources.map((r) => r._id) : []);
 
@@ -57,6 +58,7 @@ export default function Overview({ onNavigate }) {
     users.staff === 0 && { text: 'There are no event staff accounts yet, so nobody can use the door scanner.', label: 'Create one', go: 'users' },
   ].filter(Boolean);
 
+  // ring is [color, filled, total]. A tile without a ring has no share-of-total to show.
   const tiles = [
     { label: 'Students', n: students.total, sub: `${students.withCard} with an ID card`, tint: 'bg-lilac', ring: ['var(--color-plum-700)', students.withCard, students.total] },
     { label: 'Event staff', n: users.staff, sub: plural(users.admin, 'admin', 'admins'), tint: 'bg-iris' },
@@ -74,13 +76,13 @@ export default function Overview({ onNavigate }) {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {tiles.map((t, i) => (
-          <div key={t.label} style={{ '--i': i }} className={`tile rise ${t.tint} flex items-center justify-between gap-2`}>
-            <div>
+          <div key={t.label} style={{ '--i': i }} className={`tile rise ${t.tint}`}>
+            <div className="tile-top">
               <p key={t.n} className="tick font-display text-[2.4rem] font-medium leading-none tabular-nums">{t.n}</p>
-              <p className="mt-1.5 text-sm">{t.label}</p>
-              <p className="text-xs text-ink/70">{t.sub}</p>
+              {t.ring && <Ring value={t.ring[1]} total={t.ring[2]} color={t.ring[0]} size={54} stroke={7} />}
             </div>
-            {t.ring && <Ring value={t.ring[1]} total={t.ring[2]} color={t.ring[0]} size={54} stroke={7} />}
+            <p className="mt-1.5 text-sm">{t.label}</p>
+            <p className="text-xs text-ink/70">{t.sub}</p>
           </div>
         ))}
       </div>
@@ -117,6 +119,7 @@ export default function Overview({ onNavigate }) {
                 </div>
               ))}
             </div>
+            {/* the list above can be shorter than the real count, so link to the full queue */}
             {resources.pending > pendingResources.length && (
               <button onClick={() => onNavigate('board')} className="btn-text mt-2">
                 See all {resources.pending} in the Review board

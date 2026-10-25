@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { one } from '../db.js';
 import { httpError } from '../lib.js';
 
+// A missing secret is a setup mistake, so its message is allowed through to the browser (expose = true)
 export const jwtSecret = () => {
   if (!process.env.JWT_SECRET) throw httpError(500, 'JWT_SECRET is not set on the server.', true);
   return process.env.JWT_SECRET;
@@ -33,5 +34,6 @@ export default async function auth(req, res, next) {
   }
 }
 
+// Use after auth, which sets req.user
 export const requireRole = (...roles) => (req, res, next) =>
   roles.includes(req.user.role) ? next() : res.status(403).json({ message: 'Your account cannot do that' });

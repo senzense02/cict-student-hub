@@ -1,6 +1,7 @@
 // Door scanner: staff pick (or create) a session for the event, then tap student ID cards at the entrance.
-// Each tap flips a student between inside and outside, belongs to that session, is saved on the phone first,
-// and uploads in the background, so it also works offline. Ending the session moves it to the Door log.
+// Each tap flips a student between inside and outside and belongs to that session. Taps are saved on the
+// phone first and uploaded in the background, so scanning also works offline. Ending the session moves it
+// to the Door log.
 //
 //   no session chosen  ->  SessionList      (running sessions, new session)
 //   session is draft   ->  SessionSetup     (import the Google Form list, start)
@@ -40,7 +41,8 @@ function ScanSession({ session, roster, reload, onLeave }) {
   const [query, setQuery] = useState('');
   const [ending, setEnding] = useState(false);
 
-  // The session was reloaded from the server (new list, or who is inside changed on another phone)
+  // The session was reloaded from the server (new list, or who is inside changed on another phone),
+  // so re-read the inside and outside state saved on this phone
   useEffect(() => { setVenue(store.venue(sid)); }, [session, roster]);
 
   // Refresh the roster and the session. Offline, we keep using the copies saved on this phone.
@@ -62,8 +64,8 @@ function ScanSession({ session, roster, reload, onLeave }) {
   // Cards linked (or students added) by an admin reach this phone within seconds
   useLive(['users'], () => refreshStudents().then(setStudents).catch(() => {}));
 
-  // Upload each tap right after it happens so the admin sees it live. Offline? It stays queued and
-  // goes up when the connection returns.
+  // Upload each tap soon after it happens so the admin sees it live. The short delay groups quick taps
+  // into one upload. Offline, taps stay queued and go up when the connection returns.
   const syncTimer = useRef(null);
   const syncSoon = () => {
     clearTimeout(syncTimer.current);
@@ -72,12 +74,13 @@ function ScanSession({ session, roster, reload, onLeave }) {
       syncAll(user.role).catch(() => {}).finally(() => setPending(pendingCount(user.role)));
     }, 700);
   };
-  useEffect(() => () => clearTimeout(syncTimer.current), []);
+  useEffect(() => () => clearTimeout(syncTimer.current), []); // cancel a waiting upload when leaving the page
 
   // Card serial number -> student, so each tap is a quick lookup that needs no network
   const byToken = useMemo(() => new Map(students.filter((s) => s.nfcToken).map((s) => [s.nfcToken, s])), [students]);
 
   // The registration list. With no list imported, everyone is welcome and nobody is flagged.
+  // Students on the list who have no account (no userId) cannot be scanned.
   const hasList = roster.length > 0;
   const onList = useMemo(() => new Set(roster.filter((r) => r.userId).map((r) => r.userId)), [roster]);
   const expected = useMemo(() => (hasList ? students.filter((s) => onList.has(s.id)) : students), [students, onList, hasList]);
@@ -99,7 +102,7 @@ function ScanSession({ session, roster, reload, onLeave }) {
       store.setVenue(sid, next);
       store.setEvents([...store.events(), { clientId: uid(), student: student.id, token, action, scannedAt, session: sid }]);
       setVenue(next);
-      // Not on the list: the tap is recorded all the same, but staff see a red result so they can decide
+      // Not on the list: the tap is still recorded, but staff see red so they can decide what to do
       const offList = hasList && !onList.has(student.id);
       const kind = offList ? 'red' : action === 'TEMPORARY_EXIT' ? 'yellow' : 'green';
       setBanner({ kind, title: student.name, subtitle: offList ? `${LABEL[action]}. Not on the list.` : LABEL[action] });
@@ -121,8 +124,8 @@ function ScanSession({ session, roster, reload, onLeave }) {
     setVenue({});
   };
 
-  // Ending needs a connection: every tap on this phone must reach the server first, so the log is complete
-  // the moment the session appears in the Door log.
+  // Ending needs a connection: every tap on this phone must reach the server first, so the log is
+  // complete the moment the session appears in the Door log.
   const end = async () => {
     if (!confirm(`End "${session.name}"? No more cards can be scanned into it, and it moves to the Door log.`)) return;
     setEnding(true);
@@ -140,6 +143,7 @@ function ScanSession({ session, roster, reload, onLeave }) {
     }
   };
 
+  // A tile without a ring has no share-of-total to show
   const tiles = [
     { label: hasList ? 'On the list' : 'Registered', n: stats.total, tint: 'bg-lilac' },
     { label: 'Inside', n: stats.inside, tint: 'bg-sage', ring: 'var(--color-ok)' },
@@ -161,12 +165,12 @@ function ScanSession({ session, roster, reload, onLeave }) {
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {tiles.map((t, i) => (
-            <div key={t.label} style={{ '--i': i }} className={`tile rise ${t.tint} flex items-center justify-between gap-2`}>
-              <div className="min-w-0">
+            <div key={t.label} style={{ '--i': i }} className={`tile rise ${t.tint}`}>
+              <div className="tile-top">
                 <p className="font-display text-[2.4rem] font-medium leading-none tabular-nums">{t.n}</p>
-                <p className="mt-1.5 text-sm">{t.label}</p>
+                {t.ring && <Ring value={t.n} total={stats.total} color={t.ring} size={54} stroke={7} />}
               </div>
-              {t.ring && <Ring value={t.n} total={stats.total} color={t.ring} size={54} stroke={7} />}
+              <p className="mt-1.5 text-sm">{t.label}</p>
             </div>
           ))}
         </div>

@@ -26,12 +26,12 @@ export async function api(path, { method = 'GET', body, form } = {}) {
   } finally {
     clearTimeout(timer);
   }
-  const data = await res.json().catch(() => ({}));
+  const data = await res.json().catch(() => ({})); // a reply that is not JSON becomes {}, so the status error below still works
   if (!res.ok) throw Object.assign(new Error(data.message || 'Request failed'), { status: res.status, data });
   return data;
 }
 
-// Downloads a protected file with the login token and returns a temporary blob: URL
+// Downloads a protected file with the login token (a plain link cannot send it) and returns a temporary blob: URL
 export async function fetchFileUrl(path) {
   const token = localStorage.getItem('cict_token');
   const res = await fetch(`${BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });

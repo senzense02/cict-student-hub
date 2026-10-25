@@ -1,3 +1,5 @@
+// Sign-up, password and ID-card sign-in, card linking, and the current user.
+// Failed password and card attempts are throttled per IP + account (see throttle.js).
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -16,7 +18,9 @@ const TOO_MANY = { message: 'Too many attempts. Wait a few minutes and try again
 // Compared against when the account doesn't exist, so response time doesn't reveal which IDs are real
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
 
+// The token holds only the user id; the role is looked up on every request (see middleware/auth.js)
 const sign = (user) => jwt.sign({ id: user.id }, jwtSecret(), { expiresIn: '14d' });
+// What the browser may see of an account: never the password hash or the card number, only whether a card is linked
 const publicUser = (u) => ({
   id: u.id,
   studentId: u.student_id,

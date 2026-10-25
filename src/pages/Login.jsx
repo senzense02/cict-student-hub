@@ -1,5 +1,6 @@
-// Sign-in and student registration. Sign in with ID + password, or by tapping the school ID card
-// (tap only on a phone the student already confirmed with their password; otherwise tap + password).
+// Sign-in and student registration. Sign in with ID and password, or by tapping the school ID card.
+// A tap alone works only on a phone where the student already confirmed with their password once;
+// on any other phone the tap must be followed by the password.
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -36,18 +37,19 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const nfc = useNfc((t) => onTap(t));
 
+  // Stop the reader once a card has been read
   useEffect(() => {
     if (cardToken) nfc.stop();
   }, [cardToken]);
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const cardMode = mode === 'login' && via === 'card';
-  const trusted = Boolean(deviceKey()); // this phone already confirmed its owner with the password once
+  const trusted = Boolean(deviceKey()); // this phone already confirmed its owner with the password once (only changes the hint text)
 
   const resetCard = () => { setCardToken(''); setAsk(false); };
 
-  // A card was tapped. On a phone that is already trusted the tap alone signs a student in;
-  // otherwise (or if the server wants more) fall through to the password step.
+  // A card was tapped. On a trusted phone (one with a device key) the tap alone signs the student in.
+  // Otherwise, or if the server asks for more (needPassword), go to the password step.
   const onTap = async (t) => {
     setCardToken(t);
     setError('');
@@ -69,11 +71,13 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
+      // Card plus password creates the device key, which makes later taps on this phone enough on their own
       const data = cardMode
         ? await api('/auth/nfc-login', { method: 'POST', body: { token: cardToken, password: form.password, deviceKey: deviceKey({ create: true }) } })
         : await api(`/auth/${mode}`, { method: 'POST', body: form });
       if (mode === 'register') {
-        try { sessionStorage.setItem('cict_offer_card', '1'); } catch { /* ignore */ }
+        // Flag for the app to offer linking an ID card right after sign-up
+        try { sessionStorage.setItem('cict_offer_card', '1'); } catch { /* storage unavailable: the offer is skipped */ }
       }
       signIn(data);
     } catch (err) {
@@ -85,7 +89,8 @@ export default function Login() {
 
   const switchMode = (m) => { nfc.stop(); resetCard(); setMode(m); setVia('id'); setError(''); };
 
-  // Picking "Tap ID card" starts the reader right away (that click is the gesture Web NFC needs)
+  // Picking "Tap ID card" starts the reader right away, because Web NFC only starts from a user gesture
+  // and this click is one
   const pickVia = (v) => {
     setVia(v);
     setError('');
@@ -149,6 +154,7 @@ export default function Login() {
                       <button type="button" onClick={() => setVia('id')} className="btn btn-primary mt-4">Use Student ID</button>
                     </>
                   )}
+                  {/* Typing a card ID by hand, for testing without an NFC phone. Not shown in production builds. */}
                   {import.meta.env.DEV && (
                     <div className="mt-4 flex gap-2">
                       <input className="field" placeholder="Dev only: card ID" value={manual} onChange={(e) => setManual(e.target.value)} />
